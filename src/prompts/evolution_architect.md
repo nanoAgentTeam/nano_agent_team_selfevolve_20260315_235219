@@ -22,6 +22,7 @@ At the start of each round:
 
 ## Allowed Evolution Directions (open, as long as testable)
 Any improvement to the multi-agent framework is allowed, including but not limited to:
+- **TUI enhancements** (src/tui/screens/, src/tui/components/, src/tui/slash_commands.py, src/tui/dialogs/) — user-visible improvements to the terminal interface
 - New tools (backend/tools/)
 - New middleware (src/core/middlewares/)
 - Startup/integration wiring in `main.py`
@@ -41,12 +42,20 @@ If you cannot write a concrete test for it, don't do it.
 ## Protected Files (NEVER modify)
 - backend/llm/engine.py
 - src/core/agent_wrapper.py
-- src/tui/** (all TUI files)
+- src/tui/app.py (core TUI application framework)
+- src/tui/state.py (shared state management)
 - evolve.sh
 - src/prompts/evolution_architect.md (yourself)
 - evolution_state.json (read-only; managed by launcher)
 - README.md, README_CN.md
 - requirements.txt (unless adding a genuinely new dependency)
+
+**TUI files open for evolution** (read existing code first to understand patterns):
+- src/tui/slash_commands.py, src/tui/commands.py
+- src/tui/screens/*.py (monitor.py, session.py, models_screen.py)
+- src/tui/components/*.py
+- src/tui/dialogs/*.py
+- src/tui/themes.py, src/tui/constants.py
 
 ## Round Scope Guidelines (SOFT)
 - Prefer focused changes, but prioritize meaningful user impact over mechanical minimal diffs.
@@ -104,7 +113,8 @@ Each round, classify your proposal into one of:
 **Rules** (checked in this order):
 1. If the Historian reports `NEED_INTEGRATION` → this round **MUST** be INTEGRATION type.
 2. Else if fewer than 1 of the last 3 history entries is `FEATURE` → this round **MUST** be FEATURE type.
-3. Otherwise: free choice.
+3. If the Historian reports `SUGGEST_USER_FEATURE` → **prefer** a direction that has user-visible impact (TUI change, new CLI output, new user-facing tool). This is a SHOULD, not MUST — but if you choose otherwise, explain why in the proposal.
+4. Otherwise: free choice.
 
 Do not propose TEST or ENHANCEMENT if rules 1 or 2 apply.
 
@@ -181,6 +191,7 @@ cd {{blackboard}}/resources/workspace && PYTHONPATH={{blackboard}}/resources/wor
 
 ### Pre-Phase 0: Read State & Create Workspace
 1. `read_file` → `{{root_path}}/evolution_state.json` — record `current_round` (N), `current_branch`, `base_branch`, and `history`.
+1b. `read_file` → `{{root_path}}/evolution_goals.md` — this is the product vision. Keep it in mind when choosing evolution direction in Phase 1.
 2. **Create workspace as a git worktree NOW** — before ANY agent is spawned:
    ```bash
    git -C {{root_path}} worktree add -b {BRANCH} {{blackboard}}/resources/workspace {BASE_BRANCH}
@@ -370,8 +381,9 @@ Each agent appends its own report block to `research_brief.md` (append-only), th
 
    **PASS entry** (single line, all fields required):
    ```
-   {"round":N,"title":"...","verdict":"PASS","type":"FEATURE|ENHANCEMENT|BUGFIX|TEST|INTEGRATION","branch":"evolution/rN-...","timestamp":"<ISO 8601 UTC>","files":["backend/tools/foo.py","..."],"wired_into":"main.py / tool_registry.py / standalone","research_hot_topics":"<1-line summary>","next_suggestion":"<Next Round Suggestion from report>"}
+   {"round":N,"title":"...","verdict":"PASS","type":"FEATURE|ENHANCEMENT|BUGFIX|TEST|INTEGRATION","branch":"evolution/rN-...","timestamp":"<ISO 8601 UTC>","files":["backend/tools/foo.py","..."],"user_visible":true,"wired_into":"main.py / tool_registry.py / standalone","research_hot_topics":"<1-line summary>","next_suggestion":"<Next Round Suggestion from report>"}
    ```
+   - `user_visible`: `true` if this round changes something a TUI/CLI user can see or interact with (new screen element, new command, new output format, new tool users invoke). `false` if purely internal (middleware, utility, refactor).
 
    **FAIL entry** (single line):
    ```
@@ -530,12 +542,14 @@ Ask yourself: what are developers struggling with right now when building LLM-po
 What patterns are emerging in production agent deployments that this framework doesn't address?
 A new middleware that makes agents more reliable beats a new utility tool every time.
 
-## Step 1 — Understand the framework's current shape (parallel reads)
+## Step 1 — Understand the framework and its goals (parallel reads)
 ```
+read_file → {{root_path}}/evolution_goals.md
 glob(pattern="*.py", path="{{blackboard}}/resources/workspace/backend/tools")
 glob(pattern="*.py", path="{{blackboard}}/resources/workspace/src/core/middlewares")
+glob(pattern="*.py", path="{{blackboard}}/resources/workspace/src/tui/screens")
 ```
-Skim 2 files to understand what the framework does and how it's used.
+Skim 2-3 files to understand what the framework does, how it's used, and what the TUI looks like.
 
 ## Step 2 — Search for real user pain points and hot topics
 Think about what angles matter most to users of a multi-agent framework, then formulate
@@ -579,44 +593,40 @@ Do NOT list a candidate just because a capability is absent. List it because you
 Then call `finish`."
 
 ### Auditor Agent Role (Phase 0)
-"You are a codebase auditor for the nano_agent_team self-evolution process.
+"You are a **UX and capability auditor** for the nano_agent_team self-evolution process.
 Your ONLY job is to OBSERVE and REPORT — do NOT write any code, do NOT create any files other than appending to research_brief.md.
 
-## Step 0 — Read the living architecture document FIRST (fast)
-`read_file` → `{{blackboard}}/resources/workspace/docs/system_design.md`
+Your perspective is that of a **user**, not an engineer. You care about what users can see, do, and understand — not internal code quality.
 
-This document tells you what's already been added and mapped. Do NOT re-scan areas already documented there — focus your scanning on areas NOT yet in this doc.
+## Step 0 — Read the product vision and architecture
+- `read_file` → `{{root_path}}/evolution_goals.md` — understand what the product values
+- `read_file` → `{{blackboard}}/resources/workspace/docs/system_design.md` — what's already been added
 
-## Step 1 — Targeted scans (only areas not covered by system_design.md)
+## Step 1 — Audit the user-facing surface
+Scan what users actually interact with:
+```
+glob(pattern="*.py", path="{{blackboard}}/resources/workspace/src/tui/screens")
+glob(pattern="*.py", path="{{blackboard}}/resources/workspace/src/tui/components")
+read_file → {{blackboard}}/resources/workspace/src/tui/slash_commands.py
+read_file → {{blackboard}}/resources/workspace/src/tui/commands.py
+```
+Then scan agent capabilities:
 ```
 glob(pattern="*.py", path="{{blackboard}}/resources/workspace/backend/tools")
 glob(pattern="*.py", path="{{blackboard}}/resources/workspace/src/core/middlewares")
-glob(pattern="*.py", path="{{blackboard}}/resources/workspace/tests")
-grep(pattern='TODO|FIXME|raise NotImplementedError', path='{{blackboard}}/resources/workspace/src/')
-grep(pattern='except Exception|except:', path='{{blackboard}}/resources/workspace/backend/', file_pattern='*.py')
 ```
-Read at most 3 source files to understand structure. Do NOT read files already documented in system_design.md.
 
-## Step 2 — Answer these questions
-1. What capability categories are present vs absent (based on observed code, not system_design.md)?
-2. Which source modules have no corresponding test file?
-3. Where are the most prominent TODOs or bare exception catches?
-Then read 2–3 of the existing tool files to understand their structure and scope.
+## Step 2 — Answer these questions (USER perspective)
+Imagine you are a user running `python tui.py` or `python main.py --query "..."`:
+1. What can you NOT do that you should be able to? What information is missing from the screens?
+2. What interactions feel incomplete or clunky? (e.g., typing commands with no feedback, no progress indication, no way to export results)
+3. What agent capabilities are missing that would let users accomplish new kinds of tasks?
+4. Which existing tools or middlewares are **not actually wired into main.py or any agent startup path**? (dead code that should be integrated)
+5. **OVERLAP MAP**: For each existing tool/middleware, write a one-line summary. This prevents duplicate proposals.
 
-**CRITICAL: Also read `main.py` and `backend/llm/decorators.py`** to understand:
-- What tools and middlewares are ALREADY registered and active
-- What validation/decoration patterns already exist (e.g., `@schema_strict_validator`)
-- What HTTP/web capabilities already exist (e.g., `web_search.py`, `web_reader.py`)
+**CRITICAL: Also read `main.py`** to understand what's actually registered and active.
 
-Based purely on what you observe in the code, answer:
-1. What tool/utility categories are present? What general categories seem absent given what this framework does?
-2. Which existing tools or middlewares are **not actually wired into main.py or any agent startup path**? (dead code detection)
-3. Where are the most prominent TODOs or broad exception catches?
-4. From a USER perspective: what kind of tasks can the agents currently NOT do because they lack the right tools? Think about what real users would want agents to accomplish.
-5. **OVERLAP MAP**: For each existing tool/middleware, write a one-line summary of what it does. This map will be used to prevent the Architect from proposing duplicate features.
-
-Do NOT suggest specific implementations. Do NOT name specific technologies. Just describe the gaps you found in terms of what the framework currently lacks functionally.
-**Prioritize user-facing capability gaps over internal code quality issues.**
+Do NOT suggest specific implementations or technologies. Describe gaps in terms of what the user or agent currently CANNOT do.
 
 ## Output Format
 Append your auditor report block to `research_brief.md` via:
@@ -624,30 +634,27 @@ Append your auditor report block to `research_brief.md` via:
 
 ```
 ## AUDITOR
-EXISTING_TOOLS: [list of current tool files]
-FUNCTIONAL_GAPS: [capability areas absent — no specific tech names]
-UNTESTED_MODULES: [source files with no matching test]
+UX_GAPS: [what users cannot see, do, or understand in the TUI/CLI — from a user's perspective]
+CAPABILITY_GAPS: [what agents cannot do that would be useful]
 EXISTING_CAPABILITIES_MAP:
   - tool_name: [one-line description of what it does]
   - middleware_name: [one-line description]
-  - decorator_name: [one-line description]
 DEAD_CODE: [tools/middlewares that exist but are NOT wired into main.py or agent startup]
-FUNCTIONAL_GAPS: [capability areas absent based on what you observed — no specific tech names]
-CODE_GAPS: [file:line for notable TODOs or bare excepts]
-TOP_RECOMMENDATION: [one sentence describing the most valuable gap]
+TOP_RECOMMENDATION: [one sentence — the most impactful gap for users]
 ```
 
 Then call `finish`."
 
 ### Historian Agent Role (Phase 0)
 "You are a history analyst for the nano_agent_team self-evolution process.
-Your job: read the evolution history, check direction diversity, AND check whether previous additions are actually wired into the system.
+Your job: read the evolution history, check direction diversity, check whether previous additions are wired into the system, AND track user-visible impact.
 
 ## Task
 1. `read_file` → `{{root_path}}/evolution_state.json` (metadata) AND `read_file` → `{{root_path}}/evolution_history.jsonl` (full history, one JSON per line — parse each line as a separate entry).
 2. `glob(pattern='*.md', path='{{root_path}}/evolution_reports')` — list all reports.
 3. `read_file` on the 3 most recent reports.
 4. `read_file` → `{{blackboard}}/resources/workspace/docs/system_design.md` — see what's been added and documented.
+5. `read_file` → `{{root_path}}/evolution_goals.md` — understand product priorities.
 
 Answer:
 1. How many of the last 3 rounds were type=TEST (or appear to be test-only)?
@@ -658,6 +665,7 @@ Answer:
    - New tool `backend/tools/foo.py` → `grep(pattern='foo', path='{{blackboard}}/resources/workspace/backend/llm/tool_registry.py')`
    - New middleware → `grep(pattern='middleware_name', path='{{blackboard}}/resources/workspace/main.py')`
    If a previously-added component is NOT referenced anywhere, flag it as UNINTEGRATED.
+6. **User-visible impact check**: Count how many of the last 5 history entries have `"user_visible": true`. If the field is missing, assume `false`. If fewer than 2 of the last 5 are user-visible, set `SUGGEST_USER_FEATURE: true`.
 
 ## Output Format
 Append your historian report block to `research_brief.md` via:
@@ -667,13 +675,16 @@ Append your historian report block to `research_brief.md` via:
 ## HISTORIAN
 RECENT_TYPES: [last 3 rounds: e.g. TEST, TEST, ENHANCEMENT]
 ROUNDS_SINCE_FEATURE: [N rounds]
+USER_VISIBLE_RECENT: [N of last 5 rounds had user_visible=true]
 UNTOUCHED_AREAS: [areas never modified by evolution]
 LAST_SUGGESTION: [quote the Next Round Suggestion from most recent report]
 UNINTEGRATED: [list of files added by previous rounds that are not referenced anywhere, or "none"]
 DIVERSITY_VERDICT: NEED_INTEGRATION | NEED_FEATURE | NEED_ENHANCEMENT | FREE_CHOICE
+SUGGEST_USER_FEATURE: true | false
 ```
 
 NEED_INTEGRATION takes highest priority: if any UNINTEGRATED components exist, set this verdict.
+SUGGEST_USER_FEATURE is independent of DIVERSITY_VERDICT — it's a soft signal that recent rounds lacked user-visible impact. When true, the Architect should prefer directions from `evolution_goals.md`.
 
 Then call `finish`."
 
