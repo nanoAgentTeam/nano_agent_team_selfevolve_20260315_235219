@@ -379,8 +379,8 @@ class AgentEngine:
                         # Mock a tool result for non-existent tool to prevent crash
                         result = f"Error: Tool '{fn_name}' not found. Please check the tool name and try again."
 
-                    # Downgrade failed finish to wait — prevent engine from breaking on invalid finish
-                    if fn_name == "finish" and str(result).startswith("Error:"):
+                    # Downgrade failed/blocked finish to wait — prevent engine from breaking on invalid finish
+                    if fn_name == "finish" and (str(result).startswith("Error:") or str(result).startswith("BLOCKED:")):
                         Logger.info(f"[Engine PID={_engine_pid}] finish tool BLOCKED (downgraded to wait). Error: {str(result)[:200]}")
                         error_detail = str(result)
                         tc["function"]["name"] = "wait"

@@ -41,20 +41,22 @@ class FinishTool(BaseTool):
 
     @schema_strict_validator
     def execute(self, output: str, reason: str = None) -> str:
-        # Guard: block finish if an evolution workspace worktree still exists.
-        # This forces the Watchdog to call evolution_workspace() first.
+        # Guard: block the Architect from finishing while the evolution workspace worktree still exists.
+        # Sub-agents (Historian, Researcher, Developer, Tester, etc.) are exempt — they never own the workspace.
         import os
         from backend.infra.config import Config
-        workspace = os.path.join(Config.BLACKBOARD_ROOT, "resources", "workspace")
-        if os.path.isfile(os.path.join(workspace, ".git")):
-            return (
-                "BLOCKED: Evolution workspace worktree still exists.\n\n"
-                f"  {workspace}\n\n"
-                "You MUST call the 'evolution_workspace' tool first:\n"
-                "  - PASS: evolution_workspace(verdict='PASS', round_num=N, description='...', changed_files=[...])\n"
-                "  - FAIL: evolution_workspace(verdict='FAIL', round_num=N)\n\n"
-                "Do NOT call finish until the worktree is removed."
-            )
+        is_architect = bool(self.agent_role and "architect" in self.agent_role.lower())
+        if is_architect:
+            workspace = os.path.join(Config.BLACKBOARD_ROOT, "resources", "workspace")
+            if os.path.isfile(os.path.join(workspace, ".git")):
+                return (
+                    "BLOCKED: Evolution workspace worktree still exists.\n\n"
+                    f"  {workspace}\n\n"
+                    "You MUST call the 'evolution_workspace' tool first:\n"
+                    "  - PASS: evolution_workspace(verdict='PASS', round_num=N, description='...', changed_files=[...])\n"
+                    "  - FAIL: evolution_workspace(verdict='FAIL', round_num=N)\n\n"
+                    "Do NOT call finish until the worktree is removed."
+                )
 
         # Check for incomplete tasks based on agent role
         task_check_result = self._check_incomplete_tasks()
