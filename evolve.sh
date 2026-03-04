@@ -5,7 +5,7 @@
 #   --approve: auto-approve all security prompts (default: auto-deny)
 
 MAX_ROUNDS=${1:-20}
-EVOLUTION_MODEL=${2:-qwen/qwen-plus}
+EVOLUTION_MODEL=${2:-qwen/qwen3.5-plus}
 APPROVE_FLAG=""
 if [[ "$*" == *"--approve"* ]]; then
     APPROVE_FLAG="--evolution-approve"
