@@ -121,6 +121,12 @@ class SpawnSwarmAgentTool(BaseTool):
             if active_model:
                 cmd.extend(["--model", str(active_model)])
 
+            # Propagate evolution mode to sub-agents
+            if os.environ.get("NANO_EVOLUTION_MODE") == "1":
+                cmd.append("--evolution")
+                if os.environ.get("NANO_EVOLUTION_AUTO_APPROVE") == "1":
+                    cmd.append("--evolution-approve")
+
             # Pass excluded tools (default excludes ask_user for worker agents)
             if excluded_tools:
                 cmd.extend(["--exclude-tools", ",".join(excluded_tools)])

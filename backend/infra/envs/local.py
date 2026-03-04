@@ -11,7 +11,7 @@ class LocalEnvironment(Environment):
     Local environment implementation using subprocess and os.
     Includes security checks (audit guard and dangerous token detection).
     """
-    def __init__(self, workspace_root: str, blackboard_dir: str, allowed_write_paths: Optional[List[str]] = None, confirmation_callback: Optional[Callable[[str], bool]] = None, non_interactive: bool = False, agent_name: str = "UnknownAgent", auto_approve_patterns: Optional[List[str]] = None):
+    def __init__(self, workspace_root: str, blackboard_dir: str, allowed_write_paths: Optional[List[str]] = None, confirmation_callback: Optional[Callable[[str], bool]] = None, non_interactive: bool = False, agent_name: str = "UnknownAgent", auto_approve_patterns: Optional[List[str]] = None, evolution_mode: bool = False, evolution_auto_approve: bool = False):
         """
         Args:
             workspace_root: The root directory for this environment (sandbox root).
@@ -32,7 +32,9 @@ class LocalEnvironment(Environment):
         self.non_interactive = non_interactive
         self.agent_name = agent_name
         self.auto_approve_patterns = auto_approve_patterns or []
-        
+        self.evolution_mode = evolution_mode
+        self.evolution_auto_approve = evolution_auto_approve
+
         if self.non_interactive:
             # Import here to avoid circular dependencies if any (though RequestManager is standalone)
             from src.core.ipc.request_manager import RequestManager
@@ -48,10 +50,14 @@ class LocalEnvironment(Environment):
         """Helper to request confirmation via callback, IPC, or fallback to input.
 
         Priority:
-        1. confirmation_callback (TUI dialog or TAP stdio callback)
-        2. IPC RequestManager (non-interactive sub-agent mode)
-        3. CLI input() fallback (only for direct CLI usage without TUI)
+        1. Evolution mode (auto-approve everything)
+        2. confirmation_callback (TUI dialog or TAP stdio callback)
+        3. IPC RequestManager (non-interactive sub-agent mode)
+        4. CLI input() fallback (only for direct CLI usage without TUI)
         """
+        if self.evolution_mode:
+            return self.evolution_auto_approve  # True=放行, False=拒绝
+
         if self.confirmation_callback:
             return self.confirmation_callback(message)
 
@@ -232,6 +238,10 @@ class LocalEnvironment(Environment):
         """
         Perform security checks on the command to be executed.
         """
+        # Evolution mode: auto-approve or auto-deny without prompting
+        if self.evolution_mode:
+            return self.evolution_auto_approve  # True=放行, False=拒绝
+
         # Auto-approve whitelisted patterns (e.g., evolution mode auto-approves git)
         for pattern in self.auto_approve_patterns:
             if command.strip().startswith(pattern):

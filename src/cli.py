@@ -24,6 +24,8 @@ def main():
     parser.add_argument("--keys", type=str, default=None, help="Path to keys.json")
     parser.add_argument("--exclude-tools", type=str, default="", help="Comma-separated list of tools to exclude")
     parser.add_argument("--max-iterations", type=int, default=50, help="Max iterations for the agent (default: 50)")
+    parser.add_argument("--evolution", action="store_true", default=False, help="Evolution mode: bypass security prompts")
+    parser.add_argument("--evolution-approve", action="store_true", default=False, help="Auto-approve all security prompts in evolution mode (default: auto-deny)")
     
     args = parser.parse_args()
     
@@ -74,7 +76,9 @@ def main():
         allowed_write_paths=[blackboard_abs],
         non_interactive=True,
         agent_name=args.name,
-        blackboard_dir=blackboard_abs
+        blackboard_dir=blackboard_abs,
+        evolution_mode=args.evolution,
+        evolution_auto_approve=args.evolution_approve
     )
 
     print("  [Init] Bootstrapping LLM Registry (Tools, Skills, Agents)...")

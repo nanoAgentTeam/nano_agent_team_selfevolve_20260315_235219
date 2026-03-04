@@ -1,10 +1,16 @@
 #!/bin/bash
 # Self-Evolution Loop for nano_agent_team
-# Usage: bash evolve.sh [max_rounds] [model]
+# Usage: bash evolve.sh [max_rounds] [model] [--approve]
 #   model: LLM provider/model key, e.g. qwen/qwen3-max (default), deepseek/deepseek-chat
+#   --approve: auto-approve all security prompts (default: auto-deny)
 
 MAX_ROUNDS=${1:-20}
 EVOLUTION_MODEL=${2:-qwen/qwen-plus}
+APPROVE_FLAG=""
+if [[ "$*" == *"--approve"* ]]; then
+    APPROVE_FLAG="--evolution-approve"
+    echo "[WARNING] --approve flag set: all security prompts will be auto-approved"
+fi
 ROUND=1
 
 # Resolve python: prefer .venv/bin/python, fall back to python3
@@ -41,7 +47,7 @@ while [ $ROUND -le $MAX_ROUNDS ]; do
         git checkout "$START_BRANCH"
     fi
 
-    "$PYTHON" main.py --evolution --model "$EVOLUTION_MODEL"
+    "$PYTHON" main.py --evolution $APPROVE_FLAG --model "$EVOLUTION_MODEL"
     EXIT_CODE=$?
 
     # Safety: always return to starting branch after each round

@@ -74,6 +74,7 @@ def main():
 
     # Evolution mode
     parser.add_argument("--evolution", action="store_true", help="Run in self-evolution mode")
+    parser.add_argument("--evolution-approve", action="store_true", help="Auto-approve all security prompts in evolution mode (default: auto-deny)")
 
     # Global flags
     parser.add_argument("--keys", type=str, default="keys.json", help="Path to keys.json (default: keys.json)")
@@ -243,7 +244,8 @@ def main():
             workspace_root=project_root,
             blackboard_dir=blackboard_dir,
             agent_name=args.name,
-            auto_approve_patterns=["git "] if args.evolution else []
+            evolution_mode=args.evolution,
+            evolution_auto_approve=args.evolution_approve
         )
         watchdog.add_tool(BashTool(env=env))
         watchdog.add_tool(WriteFileTool(env=env))
@@ -256,6 +258,9 @@ def main():
         # finish_tool will BLOCK if this hasn't been called first
         if args.evolution:
             watchdog.add_tool(EvolutionWorkspaceTool())
+            os.environ["NANO_EVOLUTION_MODE"] = "1"
+            if args.evolution_approve:
+                os.environ["NANO_EVOLUTION_AUTO_APPROVE"] = "1"
 
         print(f"\n[Launcher] Starting {args.name} ({args.role})")
         print(f"[Launcher] Mission: {mission}\n")
