@@ -207,3 +207,4 @@ marimo/_lsp/
 __marimo__/
 *.DS_Store
 evolution_state.json
+eval_runs/

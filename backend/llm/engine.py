@@ -280,6 +280,8 @@ class AgentEngine:
                         reasoning_content = ""
                         tool_calls = []
                         for chunk in stream:
+                            if not hasattr(chunk, 'choices') or not chunk.choices:
+                                continue
                             delta = chunk.choices[0].delta
                             if delta.tool_calls:
                                 for tc_chunk in delta.tool_calls:

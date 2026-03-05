@@ -530,6 +530,9 @@ Provide a dense, factual summary:"""
                 max_tokens=self.summary_max_tokens
             )
 
+            if not response.choices:
+                Logger.warning("LLM summarization returned empty choices, skipping summary")
+                raise RuntimeError("LLM summarization returned empty choices")
             return response.choices[0].message.content
         except Exception as e:
             Logger.error(f"LLM summarization failed: {e}")
