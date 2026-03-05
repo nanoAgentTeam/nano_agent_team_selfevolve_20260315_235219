@@ -211,3 +211,4 @@ eval_runs/
 .agent_cache/
 logs/
 keys.json
+.blackboard/

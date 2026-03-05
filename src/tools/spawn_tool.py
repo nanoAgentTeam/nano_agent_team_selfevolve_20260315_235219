@@ -100,7 +100,7 @@ class SpawnSwarmAgentTool(BaseTool):
             # 3. Construct Command
             # Priority: Tool Arg > state.get_model_key() (Last Active) > Parent Agent Model (Context) > System Default
             from src.tui.state import state
-            active_model = model or state.get_model_key() or self.agent_model
+            active_model = model or self.agent_model or state.get_model_key()
 
             # Determine parent agent name (use configured name or default to "Assistant")
             parent_agent_name = getattr(self, '_parent_agent_name', 'Assistant')
