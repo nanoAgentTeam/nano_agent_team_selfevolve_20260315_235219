@@ -72,12 +72,19 @@ If your proposed improvement contains zero `.py` files, **discard it and pick a 
 
 ## Integration Rule (MANDATORY — no dead code)
 Every new module (tool, middleware, utility) MUST be **actually wired into the running system**, not just exist as standalone code with tests.
-- A new **tool** must be registered in `main.py` (added to the watchdog via `add_tool()`), or dynamically loaded by an existing loader.
-- A new **middleware** must be instantiated and passed to the agent's `extra_strategies` in `main.py`, or added to the middleware chain where agents are created.
+
+**This framework has TWO entry points that MUST stay in sync:**
+- `main.py` — CLI entry point (used by `python main.py` and `evolve.sh`)
+- `src/tui/agent_bridge.py` — TUI entry point (used by `python tui.py`)
+
+Both entry points independently construct agents and register tools/middleware. If you only wire a feature into one, the other entry point will NOT have it. **You MUST wire into BOTH.**
+
+- A new **tool** must be registered in `main.py` (added to the watchdog via `add_tool()`) AND in `agent_bridge.py` (added in `_initialize_swarm_agent()` and/or `_initialize_chat_engine()`), or dynamically loaded by an existing loader used by both paths.
+- A new **middleware** must be instantiated and passed to the agent's `extra_strategies` in `main.py` AND added via `add_strategy()` in `agent_bridge.py`'s `_initialize_swarm_agent()`.
 - A new **utility** must be imported and called by at least one existing production module.
 
-The Tester MUST verify integration: confirm the new code is reachable from `main.py` or the agent startup path, not just that unit tests pass in isolation.
-If the proposal creates a new module but does NOT integrate it, the round is **FAIL**.
+The Tester MUST verify integration in BOTH entry points: confirm the new code is reachable from `main.py` AND `agent_bridge.py`, not just that unit tests pass in isolation.
+If the proposal creates a new module but does NOT integrate it into BOTH entry points, the round is **FAIL**.
 
 ## Duplication Check (MANDATORY — before proposing)
 Before finalizing a proposal, you MUST verify it does NOT duplicate existing functionality:
@@ -277,15 +284,19 @@ After Phase-0 research is complete (Tasks 1–3 all DONE), synthesize the findin
 2. **If PASS — Wire-in Checklist (run BEFORE calling `evolution_workspace`):**
 
    A feature that cannot be reached by any running code has zero value.
+   **Remember: this framework has TWO entry points (`main.py` and `src/tui/agent_bridge.py`). Both MUST be wired.**
    For each item that applies to this round's changes, verify it is done (or instruct Developer to fix it):
 
    **New tool added (`backend/tools/foo.py`)?**
    - Is the tool class registered in `backend/llm/tool_registry.py`? (grep for `foo` in that file)
+   - Is it added via `add_tool()` in `main.py`?
+   - Is it added in `src/tui/agent_bridge.py` `_initialize_swarm_agent()` and/or `_initialize_chat_engine()`?
    - Is it listed in at least one agent's `allowed_tools`?
    - Add an entry to `docs/system_design.md` Component Map.
 
    **New middleware added (`src/core/middlewares/bar.py`)?**
-   - Is it imported and added to the middleware chain in `main.py`?
+   - Is it imported and added to the middleware chain in `main.py` (`extra_strategies`)?
+   - Is it imported and added via `add_strategy()` in `src/tui/agent_bridge.py` `_initialize_swarm_agent()`?
    - Add an entry to `docs/system_design.md`.
 
    **New skill added (`.skills/foo/`)?**
