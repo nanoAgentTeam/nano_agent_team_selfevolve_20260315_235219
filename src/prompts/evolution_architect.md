@@ -553,10 +553,10 @@ Imagine using `python tui.py` or `python main.py --query "..."`:
 1. What can you NOT do / what information is missing from the screens?
 2. What interactions feel incomplete? (no feedback, no progress, no export, etc.)
 3. What agent capabilities are missing for new kinds of tasks?
-4. Which tools/middlewares are **not wired into main.py**? (dead code)
+4. Which tools/middlewares are **not reachable from any running code path**? (dead code) Note: wiring can happen in `main.py`, `src/core/agent_wrapper.py`, `src/tui/agent_bridge.py`, or `backend/llm/tool_registry.py` — check ALL of them, not just `main.py`.
 5. **OVERLAP MAP**: one-line summary per existing tool/middleware (prevents duplicate proposals).
 
-**Also read `{{blackboard}}/resources/workspace/main.py`** to see what's actually registered. Describe gaps as what users CANNOT do — not as specific implementations.
+**Read these files to understand what's actually registered**: `{{blackboard}}/resources/workspace/main.py`, `{{blackboard}}/resources/workspace/src/core/agent_wrapper.py`, `{{blackboard}}/resources/workspace/src/tui/agent_bridge.py`. Describe gaps as what users CANNOT do — not as specific implementations.
 
 ## Output Format
 Append your auditor report block to `research_brief.md` via:
@@ -569,7 +569,7 @@ CAPABILITY_GAPS: [what agents cannot do that would be useful]
 EXISTING_CAPABILITIES_MAP:
   - tool_name: [one-line description of what it does]
   - middleware_name: [one-line description]
-DEAD_CODE: [tools/middlewares that exist but are NOT wired into main.py or agent startup]
+DEAD_CODE: [tools/middlewares that exist but are NOT reachable from any running code path (check main.py, agent_wrapper.py, agent_bridge.py, tool_registry.py)]
 TOP_RECOMMENDATION: [one sentence — the most impactful gap for users]
 ```
 
@@ -596,7 +596,11 @@ Answer:
 1. Last 3 rounds: how many were TEST? How many rounds since last FEATURE?
 2. Which codebase areas have NEVER been touched by evolution?
 3. What is the most recent 'Next Round Suggestion'?
-4. **Integration check**: For each PASS round that added a tool or middleware, `grep` to confirm it's imported somewhere (e.g. `grep(pattern='foo', path='{{blackboard}}/resources/workspace/backend/llm/tool_registry.py')`). Flag anything not referenced as UNINTEGRATED.
+4. **Integration check** (ONLY for files created by evolution — check the `files` field in PASS history entries):
+   For each evolution-created `.py` file, `grep` for its module/class name **broadly across the workspace** — search `{{blackboard}}/resources/workspace/src/` and `{{blackboard}}/resources/workspace/backend/` (exclude the file itself and test files).
+   Important: wiring can happen in MULTIPLE places — `main.py`, `src/core/agent_wrapper.py`, `src/tui/agent_bridge.py`, `backend/llm/tool_registry.py`, or any other production module. Do NOT only check `main.py`.
+   Only flag a file as UNINTEGRATED if it is not imported/referenced by ANY production code anywhere.
+   Pre-existing framework files (files NOT listed in evolution history) are NOT your concern — do NOT audit them.
 5. **User-visible check**: Count `"user_visible": true` in last 5 entries (missing = false). If fewer than 2 → `SUGGEST_USER_FEATURE: true`.
 
 ## Output Format
