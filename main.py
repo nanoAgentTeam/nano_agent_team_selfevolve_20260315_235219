@@ -4,6 +4,102 @@ import sys
 import argparse
 import shutil
 import json
+import io
+
+
+class EvolutionOutputFilter(io.TextIOBase):
+    """
+    Wraps sys.stdout during evolution mode.
+    Full output is tee'd to a log file; terminal shows only key progress.
+    """
+
+    def __init__(self, terminal, log_file):
+        self._terminal = terminal
+        self._log = log_file
+        self._buf = ""
+        self._tool_batch = []
+        self._shown_text = False
+
+    def write(self, text):
+        if self._log:
+            self._log.write(text)
+        self._buf += text
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            self._handle(line)
+        return len(text)
+
+    def _out(self, tag, content):
+        import datetime as _dt
+        ts = _dt.datetime.now().strftime("%H:%M:%S")
+        self._terminal.write(f"{ts} ── {tag:7s} ── {content}\n")
+        self._terminal.flush()
+
+    def _flush_tools(self):
+        if self._tool_batch:
+            self._out("tool", ", ".join(self._tool_batch))
+            self._tool_batch = []
+
+    def _handle(self, line):
+        s = line.strip()
+        if not s or all(c == "-" for c in s):
+            return
+
+        # Tool call -> collect just the tool name
+        if "[Tool Call]" in line:
+            self._shown_text = False
+            try:
+                name = line.split("[Tool Call] ", 1)[1].split("(", 1)[0]
+                self._tool_batch.append(name)
+            except Exception:
+                pass
+            return
+
+        # Tool result -> suppress, flush pending tool batch
+        if "[Tool Result]" in line:
+            self._flush_tools()
+            return
+
+        # Lifecycle lines -> always show
+        if any(m in line for m in (
+            "[Launcher]", "[Evolution]",
+            "Starting loop", "Detected 'finish'", "Agent loop completed",
+            "WARNING:", "Interrupted", "Exception in agent",
+            "Connection error", "Retrying engine", "Critical Error",
+            "Registered in blackboard", "Blackboard:",
+        )):
+            self._flush_tools()
+            if "Booting up with role:" in line:
+                tag = line.split("]", 1)[0] + "]" if "]" in line else ""
+                self._out("system", f"{tag} Booting up...")
+            else:
+                self._out("system", s)
+            return
+
+        # LLM text -> show first line per block, truncated
+        if not self._shown_text and len(s) > 2:
+            self._flush_tools()
+            show = (s[:200] + "...") if len(s) > 200 else s
+            self._out("message", show)
+            self._shown_text = True
+
+    def flush(self):
+        self._flush_tools()
+        if self._log:
+            self._log.flush()
+        self._terminal.flush()
+
+    def fileno(self):
+        return self._terminal.fileno()
+
+    def isatty(self):
+        return self._terminal.isatty()
+
+    @property
+    def encoding(self):
+        return self._terminal.encoding
+
+
 from src.core.agent_wrapper import SwarmAgent
 from backend.infra.config import Config
 from backend.tools.web_search import SearchTool
@@ -317,10 +413,22 @@ def main():
         print(f"[Launcher] Mission: {mission}\n")
         
         if args.evolution:
-            watchdog.run(
-                goal=f"The Evolution Mission is:\n{mission}",
-                scenario="You are the Evolution Architect. Follow the evolution protocol strictly."
-            )
+            # Filtered output: full log to file, concise progress to terminal
+            evo_log_path = os.path.join(project_root, "logs", f"evolution_r{evo_state['current_round']}_full.log")
+            os.makedirs(os.path.dirname(evo_log_path), exist_ok=True)
+            _evo_log_f = open(evo_log_path, "w", encoding="utf-8")
+            _original_stdout = sys.stdout
+            sys.stdout = EvolutionOutputFilter(_original_stdout, _evo_log_f)
+            try:
+                watchdog.run(
+                    goal=f"The Evolution Mission is:\n{mission}",
+                    scenario="You are the Evolution Architect. Follow the evolution protocol strictly."
+                )
+            finally:
+                sys.stdout.flush()
+                sys.stdout = _original_stdout
+                _evo_log_f.close()
+                print(f"[Launcher] Full log: {evo_log_path}")
         else:
             watchdog.run(
                 goal=f"The User's Mission is: {mission}",

@@ -11,6 +11,7 @@ if [[ "$*" == *"--approve"* ]]; then
     APPROVE_FLAG="--evolution-approve"
     echo "[WARNING] --approve flag set: all security prompts will be auto-approved"
 fi
+export DISABLE_LANGFUSE=true
 ROUND=1
 
 # Resolve python: prefer .venv/bin/python, fall back to python3
@@ -35,16 +36,22 @@ echo "║   Max Rounds: $MAX_ROUNDS                       ║"
 echo "║   Model: $EVOLUTION_MODEL"
 echo "╚════════════════════════════════════════╝"
 
+PASS_COUNT=0
+FAIL_COUNT=0
+
 while [ $ROUND -le $MAX_ROUNDS ]; do
     echo ""
-    echo "━━━ Evolution Round $ROUND / $MAX_ROUNDS ━━━"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Round $ROUND / $MAX_ROUNDS                        $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    ROUND_START=$(date +%s)
 
     # Ensure we start each round from the starting branch
     CURRENT_BRANCH=$(git branch --show-current)
     if [ "$CURRENT_BRANCH" != "$START_BRANCH" ]; then
         echo "[SAFETY] Not on $START_BRANCH (on $CURRENT_BRANCH). Switching back..."
-        git checkout "$START_BRANCH"
+        git checkout "$START_BRANCH" 2>/dev/null
     fi
 
     "$PYTHON" main.py --evolution $APPROVE_FLAG --model "$EVOLUTION_MODEL"
@@ -53,49 +60,52 @@ while [ $ROUND -le $MAX_ROUNDS ]; do
     # Safety: always return to starting branch after each round
     CURRENT_BRANCH=$(git branch --show-current)
     if [ "$CURRENT_BRANCH" != "$START_BRANCH" ]; then
-        echo "[SAFETY] Round ended on branch $CURRENT_BRANCH. Returning to $START_BRANCH..."
-        git checkout "$START_BRANCH"
+        git checkout "$START_BRANCH" 2>/dev/null
     fi
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Round $ROUND finished (exit: $EXIT_CODE)"
+    ROUND_END=$(date +%s)
+    DURATION=$(( ROUND_END - ROUND_START ))
+    MINUTES=$(( DURATION / 60 ))
+    SECONDS=$(( DURATION % 60 ))
 
-    # ── Post-round snapshot ──────────────────────────────────────────────────
-    echo ""
-    echo "┌─ [STATE] evolution_state.json ─────────────────────────────────────"
-    cat evolution_state.json 2>/dev/null || echo "(not found)"
-    echo ""
-    echo "└─────────────────────────────────────────────────────────────────────"
+    # Extract verdict from last line of evolution_history.jsonl
+    VERDICT="?"
+    if [ -f evolution_history.jsonl ]; then
+        LAST_LINE=$(tail -1 evolution_history.jsonl 2>/dev/null)
+        VERDICT=$(echo "$LAST_LINE" | grep -o '"verdict":"[^"]*"' | head -1 | cut -d'"' -f4)
+        TITLE=$(echo "$LAST_LINE" | grep -o '"title":"[^"]*"' | head -1 | cut -d'"' -f4)
+    fi
 
-    echo ""
-    echo "┌─ [GIT LOG] recent commits ──────────────────────────────────────────"
-    git log --oneline -8
-    echo "└─────────────────────────────────────────────────────────────────────"
+    if [ "$VERDICT" = "PASS" ]; then
+        PASS_COUNT=$((PASS_COUNT + 1))
+        echo "  >> PASS: $TITLE  (${MINUTES}m${SECONDS}s)"
+    elif [ "$VERDICT" = "FAIL" ]; then
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        REASON=$(echo "$LAST_LINE" | grep -o '"reason":"[^"]*"' | head -1 | cut -d'"' -f4)
+        echo "  >> FAIL: ${TITLE:-unknown}  (${MINUTES}m${SECONDS}s)"
+        [ -n "$REASON" ] && echo "     Reason: $REASON"
+    else
+        echo "  >> Exit code $EXIT_CODE  (${MINUTES}m${SECONDS}s)"
+    fi
 
-    echo ""
-    echo "┌─ [BRANCHES] evolution/* ────────────────────────────────────────────"
-    git branch --list 'evolution/*' -v
-    echo "└─────────────────────────────────────────────────────────────────────"
-
-    echo ""
-    echo "┌─ [REPORTS] evolution_reports/ ─────────────────────────────────────"
-    ls -lt evolution_reports/ 2>/dev/null | head -6 || echo "(empty)"
-    echo "└─────────────────────────────────────────────────────────────────────"
-    echo ""
+    echo "  Score: $PASS_COUNT PASS / $FAIL_COUNT FAIL / $ROUND total"
 
     # Stop signal check
     if [ -f ".evolution_stop" ]; then
+        echo ""
         echo "[STOP] Stop signal detected. Cleaning up."
         rm -f .evolution_stop
         break
     fi
 
     ROUND=$((ROUND + 1))
-    sleep 5  # cooldown between rounds
+    sleep 5
 done
 
 echo ""
 echo "════════════════════════════════════════"
-echo "Evolution complete. $((ROUND - 1)) rounds executed."
-echo "Reports: ls evolution_reports/"
-echo "State:   cat evolution_state.json"
+echo "  Evolution complete."
+echo "  Rounds: $((ROUND - 1))  |  PASS: $PASS_COUNT  |  FAIL: $FAIL_COUNT"
+echo "  Reports: evolution_reports/"
+echo "  Full logs: logs/evolution_r*_full.log"
 echo "════════════════════════════════════════"
