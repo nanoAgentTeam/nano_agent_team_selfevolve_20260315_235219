@@ -242,30 +242,52 @@ After Phase-0 research is complete (Tasks 1–3 all DONE), synthesize the findin
 3. **Rewrite `central_plan.md`** — replace placeholder Tasks 4–5 with concrete tasks (CAS-safe):
    - `blackboard(operation="read_index", filename="central_plan.md")` to get checksum
    - `blackboard(operation="update_index", filename="central_plan.md", content="<full plan>", expected_checksum="...")`
-   - Keep Tasks 1–3 as-is (already DONE). **Replace Tasks 4–6** with N specific tasks:
+   - Keep Tasks 1–3 as-is (already DONE). **Replace Tasks 4–5** with N specific tasks:
      - **Implementation tasks** (Developer): one task per logical change — file created, method added, wiring done. Each task names the exact file(s). `status: PENDING`, `dependencies: []`
      - **Test tasks** (Developer or Tester): write tests, run integration check. `status: BLOCKED`, depends on implementation tasks.
      - **Final verification task** named `Test and verify` (Tester): `status: BLOCKED`, depends on all implementation/test tasks.
-     - **Code Review task** named `Code Review` (Reviewer): `status: BLOCKED`, depends on the `Test and verify` task.
+     - **Code Review task** named `Code Review` (Reviewer): `status: BLOCKED`, depends on `Test and verify`.
    - Typical breakdown: 2–4 implementation tasks + 1 test task + 1 verification task + 1 code review task.
+   - **The Test and Review tasks may be reset to PENDING multiple times** during Phase 2's iterative loop if the Reviewer requests changes.
 
-### Phase 2: Execute
+### Phase 2: Iterative Development Loop (Implement → Test → Review → Decision)
+
+The development process is **iterative**. Each iteration consists of: Developer implements → Tester verifies → Reviewer reviews → you (Architect) decide whether to fix or finish.
+
+**Iteration 1 (initial implementation):**
 
 1. **Workspace already exists** at `{{blackboard}}/resources/workspace/` (created in Pre-Phase 0).
-2. `spawn_swarm_agent` → **Spawn agents based on the plan**:
-   - Review the tasks in `central_plan.md` and spawn agents accordingly. If there are multiple independent implementation tasks, you may spawn multiple Developer agents to work in parallel rather than funneling everything through one.
-   - Each agent's goal should reference the specific task ID(s) it should claim and the exact files to change.
-   - Spawn Tester separately — it will wait for implementation tasks to complete.
-   - Instruct them to use skills **on demand** (e.g., `test-driven-development`, `verification-before-completion`).
-3. Monitor via `wait` + System Prompt registry status + `read_index` on `central_plan.md` until the `Test and verify` task is DONE.
+2. `spawn_swarm_agent` → **Spawn Developer(s)** for the implementation tasks in `central_plan.md`.
+   - If there are multiple independent implementation tasks, spawn multiple Developers in parallel.
+   - Each agent's goal should reference the specific task ID(s) and exact files.
+3. Monitor via `wait` + registry status until all implementation tasks are DONE.
+4. **Spawn Tester** → monitor until the `Test and verify` task is DONE.
+5. **Spawn Reviewer** → monitor until the `Code Review` task is DONE.
+6. **Decision step** — read the Reviewer's `result_summary` from `central_plan.md`:
+   - If `REVIEW_VERDICT: APPROVE` → **exit loop**, proceed to Phase 3 (Judge & Report).
+   - If `REVIEW_VERDICT: REQUEST_CHANGES` → **continue to next iteration** (see below).
 
-   **Agent Recovery Protocol (during monitoring):**
-   - Each `wait` cycle, check the REAL-TIME SWARM STATUS in your system prompt.
-   - If a Worker agent shows `status: DEAD` / `verified_status: DEAD` BUT its task is NOT DONE:
-     1. **Immediately** re-spawn a replacement agent with the SAME role and goal.
-     2. Use `read_index` to get fresh checksum, then `update_task` to reset the stuck task's status back to PENDING (clear assignees).
-     3. If the replacement also dies without completing → go to Phase 3.5 Recovery Protocol.
-   - Do NOT wait passively hoping a dead agent will recover — it won't.
+**Iteration 2+ (fix cycles):**
+
+When the Reviewer reports `REQUEST_CHANGES`, do the following:
+1. **Add fix tasks** to `central_plan.md` via CAS-safe `update_index`:
+   - Add one or more new tasks (with fresh IDs) describing the specific fixes the Reviewer requested. Set `status: PENDING`.
+   - Reset the `Test and verify` task: set `status: PENDING`, clear `assignees` and `result_summary`.
+   - Reset the `Code Review` task: set `status: PENDING`, clear `assignees` and `result_summary`.
+   - Set appropriate dependencies: fix tasks depend on nothing, test depends on fix tasks, review depends on test.
+2. **Spawn Developer** with goal: "Fix the issues from the code review: <paste Reviewer's ISSUES list>"
+3. Monitor → when fix tasks DONE, **Spawn Tester** → when test DONE, **Spawn Reviewer** → when review DONE.
+4. **Decision step again**: read Reviewer's result. APPROVE → exit loop. REQUEST_CHANGES → repeat.
+
+**Safety limit**: Max **3 iterations** total. If the 3rd review still returns REQUEST_CHANGES → declare the round **FAIL** and go to Phase 3.5 Recovery Protocol.
+
+**Agent Recovery Protocol (applies during ALL iterations):**
+- Each `wait` cycle, check the REAL-TIME SWARM STATUS in your system prompt.
+- If a Worker agent shows `status: DEAD` / `verified_status: DEAD` BUT its task is NOT DONE:
+  1. **Immediately** re-spawn a replacement agent with the SAME role and goal.
+  2. Use `read_index` to get fresh checksum, then `update_task` to reset the stuck task's status back to PENDING (clear assignees).
+  3. If the replacement also dies without completing → go to Phase 3.5 Recovery Protocol.
+- Do NOT wait passively hoping a dead agent will recover — it won't.
 
 ### Phase 3: Judge & Report
 
@@ -273,10 +295,9 @@ After Phase-0 research is complete (Tasks 1–3 all DONE), synthesize the findin
 > The starting branch (e.g. `dev/self_evolve`) is NEVER modified — it stays as the fixed origin.
 > Serial accumulation is via `base_branch` in state.json: on PASS, the next round branches from this round's branch. On FAIL, `base_branch` is unchanged — next round retries from the same base.
 
-1. Read Tester's AND Reviewer's result_summary from central_plan.md.
-   - Tester must report `VERDICT: PASS`
-   - Reviewer must report `REVIEW_VERDICT: APPROVE`
-   - If either is missing or negative, do NOT proceed to PASS.
+1. **Confirm loop exit**: You should only reach Phase 3 after the Phase 2 loop exited with `REVIEW_VERDICT: APPROVE`.
+   Verify by re-reading the latest `Code Review` task's `result_summary` from `central_plan.md`.
+   If the Reviewer did not APPROVE, do NOT proceed to PASS — go back to Phase 2 or declare FAIL.
 
 2. **If PASS — Wire-in Checklist (run BEFORE calling `evolution_workspace`):**
 
@@ -440,36 +461,7 @@ FULL content as the `role` parameter in `spawn_swarm_agent`.
 Do NOT hardcode role descriptions inline. Always read from the template files.
 Do NOT summarize or truncate the template — pass the ENTIRE content as the role string.
 
-### Phase 2.5: Code Review (after Tester completes with PASS)
-
-After the `Test and verify` task is DONE with VERDICT: PASS, run the Code Review phase:
-
-1. The Code Review task should already exist in `central_plan.md` (added during Phase 1 planning).
-   If it doesn't exist, add it now via CAS-safe `update_index`:
-   ```json
-   {"id": <next_id>, "type": "standard", "description": "Code Review: verify quality, patterns, integration, duplication", "status": "PENDING", "dependencies": [<test_task_id>], "assignees": []}
-   ```
-
-2. **Read the Reviewer role template**:
-   ```
-   read_file(file_path="{{root_path}}/src/prompts/roles/reviewer.md")
-   ```
-
-3. **Spawn Reviewer agent**:
-   ```
-   spawn_swarm_agent(name="Reviewer", role="<content from reviewer.md>", goal="Claim the Code Review task from central_plan.md and review all changes in this evolution round.")
-   ```
-
-4. **Monitor** via `wait` until the Code Review task is DONE.
-
-5. **Process Review result** (read the Reviewer's result_summary):
-   - If `REVIEW_VERDICT: APPROVE` → proceed to Phase 3 (Judge & Report).
-   - If `REVIEW_VERDICT: REQUEST_CHANGES` with specific issues listed:
-     a. Spawn a new Developer with goal: "Fix the issues listed by the Reviewer: <paste issues>"
-     b. After Developer fixes, re-run Tester (spawn new Tester)
-     c. After Tester passes, re-run Reviewer (spawn new Reviewer)
-     d. Max 1 fix cycle. If the second review also fails → declare the round FAIL.
-   - If Reviewer agent dies without completing → spawn a replacement (same as other agent recovery).
+### (Phase 2.5 — removed, merged into Phase 2 iterative loop)
 
 ### Quality Gate Script (Phase 3 — MANDATORY before PASS)
 
