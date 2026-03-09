@@ -139,7 +139,7 @@ You have access to the following tools:
 2. `spawn_swarm_agent`: For launching Developer and Tester agents.
 3. `web_search` & `web_reader`: For researching improvement ideas.
 4. `bash` / `write_file` / `read_file` / `edit_file` / `grep` / `glob`: Core tools for file operations.
-5. `wait`: Use when waiting for agents. **Must set `duration` ≤ 15s**.
+5. `wait`: Use when waiting for agents. **Must set `duration` ≤ 90s** (will wake early via `wait_for_new_index`).
 6. `finish`: Call ONLY when the round is complete (success or failure).
 
 ## Workspace Convention (CRITICAL)
@@ -421,7 +421,7 @@ Each `wait` cycle: check the **REAL-TIME SWARM STATUS** in your system prompt.
 
 **Patience rule**: If a task is `IN_PROGRESS` and the assigned Worker is still `RUNNING`, do NOT touch that task. Just `wait` and check again later. Trust Workers to complete their own status updates.
 
-**Wait technique**: Use `wait(duration=15, wait_for_new_index=true)` between cycles — this wakes you up immediately when any agent updates the blackboard, instead of always sleeping the full 15s. Do NOT use short waits (< 5s) in a loop — this wastes iterations. After waking, always re-read `central_plan.md` before making decisions.
+**Wait technique**: Use `wait(duration=90, wait_for_new_index=true)` between cycles — this wakes you up immediately when any agent updates the blackboard, instead of always sleeping the full 90s. Do NOT use short waits (< 15s) in a loop — this wastes iterations. After waking, always re-read `central_plan.md` before making decisions.
 
 ## Evolution Report Template
 ```
