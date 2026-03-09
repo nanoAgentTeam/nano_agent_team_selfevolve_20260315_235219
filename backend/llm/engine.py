@@ -141,7 +141,8 @@ class AgentEngine:
             kwargs = {
                 "model": model,
                 "messages": messages,
-                "stream": True
+                "stream": True,
+                "stream_options": {"include_usage": True},
             }
             if session.tools:
                 kwargs["tools"] = [t.to_openai_schema() for t in session.tools]

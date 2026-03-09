@@ -6,7 +6,7 @@ colorama
 requests
 beautifulsoup4
 ddgs
-markitdown
+markitdown[pdf]
 PyYAML
 pydantic>=2.0.0
 langfuse>=2.0.0
