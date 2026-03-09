@@ -17,12 +17,13 @@ from backend.llm.engine import AgentEngine
 from backend.infra.config import Config
 from backend.llm.types import SystemPromptConfig
 from backend.llm.middleware import (
-    ExecutionBudgetManager, 
+    ExecutionBudgetManager,
     InteractionRefinementMiddleware,
     ErrorRecoveryMiddleware,
     LoopBreakerMiddleware,
     ToolResultCacheMiddleware
 )
+from backend.llm.history_middleware import RuleSlidingWindowMiddleware, LLMSlidingWindowMiddleware
 from backend.tools.base import BaseTool
 
 from src.tools.ask_user_tool import AskUserTool
@@ -85,7 +86,8 @@ class SwarmAgent:
         # Initialize Engine with specific strategies
         strategies = [
             ErrorRecoveryMiddleware(),
-            ToolResultCacheMiddleware(),  # HISTORY_STRATEGY_SWAP: replace with RuleSlidingWindowMiddleware() or LLMSlidingWindowMiddleware(summary_model="qwen/qwen-flash") from backend.llm.history_middleware
+            # ToolResultCacheMiddleware(),  # HISTORY_STRATEGY_SWAP: replace with RuleSlidingWindowMiddleware() or LLMSlidingWindowMiddleware(summary_model="qwen/qwen-flash") from backend.llm.history_middleware
+            RuleSlidingWindowMiddleware(),
             LoopBreakerMiddleware(),
             InteractionRefinementMiddleware(),
             DependencyGuardMiddleware(blackboard_dir),
