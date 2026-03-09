@@ -95,7 +95,7 @@ class AgentEngine:
         self.strategies = strategies if strategies is not None else [
             ContextOverflowMiddleware(),     # Outermost: catch context length errors, summarize and retry
             ErrorRecoveryMiddleware(),       # Handle connection errors and other exceptions
-            ToolResultCacheMiddleware(),     # Preventive compression of tool results
+            ToolResultCacheMiddleware(),     # HISTORY_STRATEGY_SWAP: replace with RuleSlidingWindowMiddleware() or LLMSlidingWindowMiddleware(summary_model="qwen/qwen-flash") from backend.llm.history_middleware
             LoopBreakerMiddleware(),
             SemanticDriftGuard(),
             ExecutionBudgetManager()
@@ -506,10 +506,9 @@ class AgentEngine:
             raise e
         finally:
             self.depth -= 1
-            # Clean up cache middleware
+            # Clean up middlewares
             for strategy in self.strategies:
-                if isinstance(strategy, ToolResultCacheMiddleware):
-                    strategy.cleanup()
+                strategy.cleanup()
 
     @observe(as_type="span")
     def invoke_agent(self, agent_name: str, query: str, history: List[Dict[str, Any]] = None, on_step_log: callable = None, forced_skill: str = None, return_full_history: bool = True) -> Generator[AgentEvent, None, None]:

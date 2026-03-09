@@ -11,6 +11,13 @@ class FinishTool(BaseTool):
         self.agent_name = agent_name
         self.agent_role = agent_role
         self.blackboard_dir = blackboard_dir
+        self._is_architect = False
+
+    def configure(self, context: Dict[str, Any]):
+        """Receive runtime context including is_architect flag."""
+        self._is_architect = context.get("is_architect", False)
+        if context.get("agent_name"):
+            self.agent_name = context["agent_name"]
     @property
     def name(self) -> str:
         return "finish"
@@ -45,8 +52,7 @@ class FinishTool(BaseTool):
         # Sub-agents (Historian, Researcher, Developer, Tester, etc.) are exempt — they never own the workspace.
         import os
         from backend.infra.config import Config
-        is_architect = bool(self.agent_role and "architect" in self.agent_role.lower())
-        if is_architect:
+        if self._is_architect:
             workspace = os.path.join(Config.BLACKBOARD_ROOT, "resources", "workspace")
             if os.path.isfile(os.path.join(workspace, ".git")):
                 return (
@@ -95,7 +101,7 @@ class FinishTool(BaseTool):
                 return None
 
             # Check based on agent role
-            if self.agent_role and "architect" in self.agent_role.lower():
+            if self._is_architect:
                 # Architect: check ALL tasks
                 incomplete = [t for t in tasks if t.get("status") in ["PENDING", "IN_PROGRESS", "BLOCKED"]]
 

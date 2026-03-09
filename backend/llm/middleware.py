@@ -82,6 +82,10 @@ class StrategyMiddleware(ABC):
         """
         pass
 
+    def cleanup(self):
+        """Optional cleanup hook called when the engine run ends. Override if needed."""
+        pass
+
 class LoopBreakerMiddleware(StrategyMiddleware):
     """
     Loop Detection Middleware
