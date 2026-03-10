@@ -66,21 +66,58 @@ class _SlidingWindowBase(StrategyMiddleware):
         self._compress_tool_results(history)
 
         # Step 2: Slide window if history exceeds limit
-        # Separate existing summary (if any) from actual messages
+        #
+        # After sliding, the history is always:
+        #   [assistant(summary), user(pinned_task), ...window starting with assistant...]
+        #
+        # This guarantees valid message alternation for all LLM providers:
+        #   assistant → user → assistant → tool → assistant → ...
+        #
+        # The user's original task message is "pinned" — never expired into the summary.
+        # This follows the same pattern as Claude API compaction and OpenCode.
+
         existing_summary = None
+        user_task = None
         actual_start = 0
+
         if (history
-                and history[0].get("role") == "user"
+                and history[0].get("role") == "assistant"
                 and isinstance(history[0].get("content"), str)
                 and history[0]["content"].startswith(_SUMMARY_MARKER)):
+            # Subsequent sliding: [assistant(summary), user(task), ...actual...]
             existing_summary = history[0]["content"]
-            actual_start = 1
+            if len(history) > 1 and history[1].get("role") == "user":
+                user_task = history[1]
+                actual_start = 2
+            else:
+                actual_start = 1
+        else:
+            # First sliding: find and pin the user's task message
+            for i, msg in enumerate(history):
+                if msg.get("role") == "user":
+                    user_task = msg
+                    actual_start = i + 1
+                    break
 
         actual_len = len(history) - actual_start
         if actual_len > self.window_size:
             actual_history = history[actual_start:]
-            expired = actual_history[:-self.window_size]
-            window = actual_history[-self.window_size:]
+
+            # Find a safe cut point so window starts with "assistant".
+            # This single rule prevents:
+            #   - Orphaned tool results (tool without preceding assistant+tool_calls)
+            #   - Consecutive assistant messages (assistant summary + assistant window start)
+            #   - Broken tool_call/result pairs (assistant's tool results always follow it)
+            cut = len(actual_history) - self.window_size
+            while cut > 0 and actual_history[cut].get("role") != "assistant":
+                cut -= 1
+
+            if cut <= 0:
+                # No safe cut point found — skip sliding this round
+                return next_call(session)
+
+            expired = actual_history[:cut]
+            window = actual_history[cut:]
 
             new_summary_text = self._generate_summary(expired, session)
 
@@ -95,8 +132,14 @@ class _SlidingWindowBase(StrategyMiddleware):
             if len(merged_body) > self.max_summary_chars:
                 merged_body = "...(earlier history truncated)...\n" + merged_body[-(self.max_summary_chars - 40):]
 
-            summary_msg = {"role": "user", "content": _SUMMARY_MARKER + "\n" + merged_body}
-            session.history = [summary_msg] + window
+            summary_msg = {"role": "assistant", "content": _SUMMARY_MARKER + "\n" + merged_body}
+
+            # Build: [assistant(summary), user(task), ...window...]
+            new_history = [summary_msg]
+            if user_task:
+                new_history.append(user_task)
+            new_history.extend(window)
+            session.history = new_history
 
             Logger.info(f"[SlidingWindow] Slid window: expired {len(expired)} msgs, "
                         f"summary {len(merged_body)} chars, window {len(window)} msgs")
