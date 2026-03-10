@@ -87,7 +87,8 @@ class SwarmAgent:
         strategies = [
             ErrorRecoveryMiddleware(),
             # ToolResultCacheMiddleware(),  # HISTORY_STRATEGY_SWAP: replace with RuleSlidingWindowMiddleware() or LLMSlidingWindowMiddleware(summary_model="qwen/qwen-flash") from backend.llm.history_middleware
-            RuleSlidingWindowMiddleware(),
+            # RuleSlidingWindowMiddleware(),
+            LLMSlidingWindowMiddleware(),
             LoopBreakerMiddleware(),
             InteractionRefinementMiddleware(),
             DependencyGuardMiddleware(blackboard_dir),
