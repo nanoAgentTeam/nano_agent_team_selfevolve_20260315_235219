@@ -29,6 +29,95 @@ log() {
     echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG_FILE"
 }
 
+# ─── Persistent Status Panel ─────────────────────────────
+STATUS_HEIGHT=9
+SESSION_START_TS=$(date +%s)
+STATUS_UPDATER_PID=""
+
+render_status_panel() {
+    local phase="${1:-Initializing}"
+    local cols=$(tput cols 2>/dev/null || echo 80)
+    local inner=$((cols - 4))
+    local now=$(date +%s)
+    local elapsed=$(( now - SESSION_START_TS ))
+    local h=$((elapsed / 3600))
+    local m=$(( (elapsed % 3600) / 60 ))
+    local s=$((elapsed % 60))
+    local elapsed_str
+    if [ $h -gt 0 ]; then elapsed_str="${h}h${m}m${s}s"
+    else elapsed_str="${m}m${s}s"; fi
+
+    # Parse evolution history from file
+    local pass=0 fail=0 total=0 history=""
+    local hist_file="evolution_history.jsonl"
+    if [ -f "$hist_file" ]; then
+        while IFS= read -r line; do
+            total=$((total + 1))
+            local v=$(echo "$line" | grep -o '"verdict":"[^"]*"' | cut -d'"' -f4)
+            case "$v" in
+                PASS) pass=$((pass + 1)); history="${history} R${total}:PASS" ;;
+                FAIL) fail=$((fail + 1)); history="${history} R${total}:FAIL" ;;
+                *)    history="${history} R${total}:?" ;;
+            esac
+        done < "$hist_file"
+    fi
+
+    local running=$((total + 1))
+    [ "$running" -gt "$MAX_ROUNDS" ] && running=$MAX_ROUNDS
+
+    # Save cursor, draw status at top, restore cursor
+    tput sc
+    tput cup 0 0
+
+    local border=$(printf '═%.0s' $(seq 1 $((cols - 2))))
+    printf "\e[44;97m╔%s╗\e[0m\n" "$border"
+    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  EVOLUTION SESSION: ${SESSION_NAME}"
+    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  Model: ${MODEL}  |  Round: ${running}/${MAX_ROUNDS}  |  Elapsed: ${elapsed_str}"
+    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  Phase: ${phase}"
+    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  Score: ${pass} PASS / ${fail} FAIL / ${total} completed"
+    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  History:${history:- (none yet)}"
+    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  Work: ${WORK_REPO}"
+    printf "\e[44;97m╚%s╝\e[0m\n" "$border"
+
+    tput rc
+}
+
+init_status_panel() {
+    local rows=$(tput lines 2>/dev/null || echo 24)
+    clear
+    # Fix top STATUS_HEIGHT lines, scroll region below
+    tput csr $STATUS_HEIGHT $((rows - 1))
+    tput cup $STATUS_HEIGHT 0
+    render_status_panel "Initializing"
+}
+
+write_status() {
+    echo "$1" > .evolution_phase
+}
+
+start_status_updater() {
+    (
+        while true; do
+            local phase="Initializing"
+            [ -f .evolution_phase ] && phase=$(cat .evolution_phase 2>/dev/null)
+            render_status_panel "$phase"
+            sleep 5
+        done
+    ) &
+    STATUS_UPDATER_PID=$!
+}
+
+stop_status_updater() {
+    if [ -n "${STATUS_UPDATER_PID:-}" ] && kill -0 "$STATUS_UPDATER_PID" 2>/dev/null; then
+        kill "$STATUS_UPDATER_PID" 2>/dev/null || true
+        wait "$STATUS_UPDATER_PID" 2>/dev/null || true
+    fi
+    rm -f .evolution_phase
+    # Reset scroll region to full terminal
+    local rows=$(tput lines 2>/dev/null || echo 24)
+    tput csr 0 $((rows - 1)) 2>/dev/null || true
+}
+
 # ─── Pre-flight checks ────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
@@ -59,8 +148,8 @@ fi
 # ═══════════════════════════════════════════════════════════════
 echo "────────────────────────────────────────────────────────────"
 
-# 1. Copy entire project (including .venv, .git, everything)
-cp -R "$SOURCE_DIR" "$WORK_REPO"
+# 1. Copy project excluding .venv (use symlink instead)
+rsync -a --exclude='.venv' "$SOURCE_DIR/" "$WORK_REPO/"
 
 # Now LOG_FILE is writable
 log "PHASE 0: Created new repo at ${WORK_REPO}"
@@ -68,7 +157,13 @@ log "PHASE 0: Created new repo at ${WORK_REPO}"
 # 2. Enter the new repo — all subsequent work happens here
 cd "$WORK_REPO"
 
-# 3. Create a NEW GitHub repo and point origin to it
+# 3. Symlink .venv from source repo
+if [ -d "$SOURCE_DIR/.venv" ]; then
+    ln -s "$SOURCE_DIR/.venv" "$WORK_REPO/.venv"
+    log "Symlinked .venv from source repo"
+fi
+
+# 4. Create a NEW GitHub repo and point origin to it
 #    Extract token and org from source repo's origin URL
 SOURCE_REMOTE=$(git remote get-url origin 2>/dev/null || true)
 GH_TOKEN=$(echo "$SOURCE_REMOTE" | grep -o 'ghp_[^@]*' || true)
@@ -108,44 +203,97 @@ else
     SKIP_PUSH=true
 fi
 
-# 4. Create 'original' branch from main (snapshot of pre-evolution state)
+# 5. Create 'original' branch from main (snapshot of pre-evolution state)
 git checkout -b original
 log "Created 'original' branch from main"
 
-# 4. Clean previous evolution artifacts in the new repo
+# 6. Clean previous evolution artifacts in the new repo
 bash clean_evolution.sh 2>&1 | tee -a "$LOG_FILE"
 log "Cleaned evolution artifacts"
 echo ""
+
+# ─── Initialize persistent status panel ──────────────────────
+init_status_panel
+start_status_updater
+write_status "Phase 1: Screen Recording"
 
 # ═══════════════════════════════════════════════════════════════
 # PHASE 1: Start screen recording
 # ═══════════════════════════════════════════════════════════════
 log "PHASE 1: Starting screen recording..."
 echo "────────────────────────────────────────────────────────────"
+echo ">>> Click the terminal window you want to record <<<"
 
-ffmpeg -y -f avfoundation \
-    -capture_cursor 1 -capture_mouse_clicks 1 \
-    -framerate 30 -i "1:none" \
-    -c:v libx264 -b:v "$BITRATE" -pix_fmt yuv420p \
-    "$RECORDING_FILE" </dev/null &>/dev/null &
+# Get window bounds via System Events (works with Ghostty and other terminals)
+WINDOW_BOUNDS=$(osascript <<'APPLESCRIPT'
+tell application "System Events"
+    set frontApp to first application process whose frontmost is true
+    set win to window 1 of frontApp
+    set {x, y} to position of win
+    set {w, h} to size of win
+    return (x as text) & ":" & (y as text) & ":" & (w as text) & ":" & (h as text)
+end tell
+APPLESCRIPT
+) || true
+
+if [ -n "$WINDOW_BOUNDS" ]; then
+    IFS=':' read -r WIN_X WIN_Y WIN_W WIN_H <<< "$WINDOW_BOUNDS"
+    # Ensure dimensions are even (required by libx264)
+    WIN_W=$(( (WIN_W / 2) * 2 ))
+    WIN_H=$(( (WIN_H / 2) * 2 ))
+    log "Recording window at (${WIN_X},${WIN_Y}) ${WIN_W}x${WIN_H}"
+
+    ffmpeg -y -f avfoundation \
+        -capture_cursor 1 -capture_mouse_clicks 1 \
+        -framerate 30 -i "1:none" \
+        -vf "crop=${WIN_W}:${WIN_H}:${WIN_X}:${WIN_Y}" \
+        -c:v libx264 -b:v "$BITRATE" -pix_fmt yuv420p \
+        "$RECORDING_FILE" </dev/null 2>>"${WORK_REPO}/ffmpeg.log" &
+else
+    log "WARNING: Could not get window bounds, recording full screen"
+    ffmpeg -y -f avfoundation \
+        -capture_cursor 1 -capture_mouse_clicks 1 \
+        -framerate 30 -i "1:none" \
+        -c:v libx264 -b:v "$BITRATE" -pix_fmt yuv420p \
+        "$RECORDING_FILE" </dev/null 2>>"${WORK_REPO}/ffmpeg.log" &
+fi
 FFMPEG_PID=$!
-log "Screen recording started (PID: $FFMPEG_PID) -> $RECORDING_FILE"
 sleep 2
+# Verify ffmpeg actually started
+if kill -0 "$FFMPEG_PID" 2>/dev/null; then
+    log "Screen recording started (PID: $FFMPEG_PID) -> $RECORDING_FILE"
+else
+    log "WARNING: ffmpeg failed to start. Check ${WORK_REPO}/ffmpeg.log"
+fi
 
 # Ensure we stop recording on exit
-cleanup_recording() {
+stop_recording() {
     if kill -0 "$FFMPEG_PID" 2>/dev/null; then
         log "Stopping screen recording..."
         kill -INT "$FFMPEG_PID"
+        # Wait up to 10 seconds for ffmpeg to finalize, then force kill
+        for i in $(seq 1 10); do
+            kill -0 "$FFMPEG_PID" 2>/dev/null || break
+            sleep 1
+        done
+        if kill -0 "$FFMPEG_PID" 2>/dev/null; then
+            log "WARNING: ffmpeg did not exit gracefully, force killing..."
+            kill -9 "$FFMPEG_PID" 2>/dev/null || true
+        fi
         wait "$FFMPEG_PID" 2>/dev/null || true
         log "Recording saved: $RECORDING_FILE"
     fi
 }
-trap cleanup_recording EXIT
+cleanup_all() {
+    stop_status_updater
+    stop_recording
+}
+trap cleanup_all EXIT
 
 # ═══════════════════════════════════════════════════════════════
 # PHASE 2: Run evolution rounds (from 'original' branch)
 # ═══════════════════════════════════════════════════════════════
+write_status "Phase 2: Evolution (${MAX_ROUNDS} rounds with ${MODEL})"
 log "PHASE 2: Running evolution ($MAX_ROUNDS rounds with $MODEL) from 'original' branch..."
 echo "────────────────────────────────────────────────────────────"
 
@@ -166,15 +314,38 @@ if [ -f evolution_history.jsonl ]; then
 fi
 
 if [ -z "$LAST_PASS_BRANCH" ]; then
-    log "WARNING: No PASS rounds found. main branch will remain unchanged."
-else
-    log "Last PASS branch: $LAST_PASS_BRANCH"
+    log "WARNING: No PASS rounds found. Skipping PHASE 3/4/5 (debug/README/push)."
 
-    # 6. Merge last PASS branch into main (full overwrite with -X theirs)
-    git checkout main
-    git merge "$LAST_PASS_BRANCH" -X theirs --no-edit -m "merge: evolution session ${TIMESTAMP} - merge ${LAST_PASS_BRANCH} into main (full overwrite)"
-    log "Merged $LAST_PASS_BRANCH into main (full overwrite)"
+    # Snapshot evolution artifacts even on failure
+    SNAPSHOT_DIR="evolution_sessions/${SESSION_NAME}"
+    mkdir -p "$SNAPSHOT_DIR"
+    cp -f evolution_history.jsonl "$SNAPSHOT_DIR/" 2>/dev/null || true
+    cp -f evolution_state.json "$SNAPSHOT_DIR/" 2>/dev/null || true
+    cp -rf evolution_reports/ "$SNAPSHOT_DIR/" 2>/dev/null || true
+    log "Artifacts saved to $SNAPSHOT_DIR"
+
+    # stop_recording + stop_status_updater will be called by trap EXIT
+    write_status "Complete (0 PASS)"
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║              Session Complete (0 PASS)                  ║"
+    echo "╠══════════════════════════════════════════════════════════╣"
+    echo "║  Work Repo:  ${WORK_REPO}"
+    echo "║  Evolution:  ${MAX_ROUNDS} rounds with ${MODEL}"
+    echo "║  Result:     No PASS rounds — main unchanged"
+    echo "║  Recording:  ${RECORDING_FILE}"
+    echo "║  Artifacts:  ${SNAPSHOT_DIR}/"
+    echo "║  Log:        ${LOG_FILE}"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    exit 0
 fi
+
+log "Last PASS branch: $LAST_PASS_BRANCH"
+
+# 6. Merge last PASS branch into main (full overwrite with -X theirs)
+git checkout main
+git merge "$LAST_PASS_BRANCH" -X theirs --no-edit -m "merge: evolution session ${TIMESTAMP} - merge ${LAST_PASS_BRANCH} into main (full overwrite)"
+log "Merged $LAST_PASS_BRANCH into main (full overwrite)"
 
 # Ensure we're on main for subsequent phases
 git checkout main 2>/dev/null || true
@@ -191,8 +362,12 @@ log "Artifacts saved to $SNAPSHOT_DIR"
 # ═══════════════════════════════════════════════════════════════
 # PHASE 3: Analyze evolution results & Debug new features
 # ═══════════════════════════════════════════════════════════════
+write_status "Phase 3: Debug & Analysis"
 log "PHASE 3: Analyzing evolution results & debugging..."
 echo "────────────────────────────────────────────────────────────"
+
+# Unset CLAUDECODE to avoid nested session detection
+unset CLAUDECODE 2>/dev/null || true
 
 # Read evolution history for context
 EVO_HISTORY=""
@@ -232,8 +407,8 @@ ANALYSIS_PROMPT=$(cat <<'PROMPT_EOF'
 PROMPT_EOF
 )
 
-# Run Claude Code for analysis & debug
-echo "$ANALYSIS_PROMPT" | $CLAUDE_CMD 2>&1 | tee -a "$LOG_FILE"
+# Run Claude Code for analysis & debug (don't exit on failure)
+echo "$ANALYSIS_PROMPT" | $CLAUDE_CMD 2>&1 | tee -a "$LOG_FILE" || true
 DEBUG_EXIT=$?
 
 if [ $DEBUG_EXIT -ne 0 ]; then
@@ -243,6 +418,7 @@ fi
 # ═══════════════════════════════════════════════════════════════
 # PHASE 4: Write README.md & README_CN.md
 # ═══════════════════════════════════════════════════════════════
+write_status "Phase 4: Writing README"
 log "PHASE 4: Writing README files..."
 echo "────────────────────────────────────────────────────────────"
 
@@ -287,11 +463,12 @@ README_PROMPT=$(cat <<PROMPT_EOF
 PROMPT_EOF
 )
 
-echo "$README_PROMPT" | $CLAUDE_CMD 2>&1 | tee -a "$LOG_FILE"
+echo "$README_PROMPT" | $CLAUDE_CMD 2>&1 | tee -a "$LOG_FILE" || true
 
 # ═══════════════════════════════════════════════════════════════
 # PHASE 5: Commit & Push to GitHub
 # ═══════════════════════════════════════════════════════════════
+write_status "Phase 5: Commit & Push"
 log "PHASE 5: Committing and pushing to GitHub..."
 echo "────────────────────────────────────────────────────────────"
 
@@ -322,24 +499,17 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# PHASE 6: Stop recording
+# PHASE 6: Stop recording (handled by trap EXIT → stop_recording)
 # ═══════════════════════════════════════════════════════════════
-log "PHASE 6: Stopping screen recording..."
-echo "────────────────────────────────────────────────────────────"
-
-# Stop ffmpeg gracefully (SIGINT = finalize file, same as pressing 'q')
-if kill -0 "$FFMPEG_PID" 2>/dev/null; then
-    kill -INT "$FFMPEG_PID"
-    wait "$FFMPEG_PID" 2>/dev/null || true
-    trap - EXIT
-    log "Recording saved: $RECORDING_FILE"
-fi
 
 # Close Bilibili client if running
 if pgrep -f "哔哩哔哩" &>/dev/null; then
     log "Closing Bilibili client..."
     osascript -e 'quit app "哔哩哔哩"' 2>/dev/null || pkill -f "哔哩哔哩" 2>/dev/null || true
 fi
+
+# Update status panel one last time
+write_status "Session Complete!"
 
 # Final summary
 echo ""
