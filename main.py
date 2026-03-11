@@ -55,9 +55,14 @@ class EvolutionOutputFilter(io.TextIOBase):
             self._shown_text = False
             try:
                 raw = line.split("[Tool Call] ", 1)[1]
-                # Flatten newlines in args
                 flat = raw.replace("\n", "\\n").replace("\r", "")
-                self._tool_batch.append(flat)
+                # Separate name from args for visual clarity
+                if "(" in flat:
+                    name, rest = flat.split("(", 1)
+                    args = rest.rstrip(")")
+                    self._tool_batch.append(f"<{name}> » {args}")
+                else:
+                    self._tool_batch.append(f"<{flat}>")
             except Exception:
                 pass
             return
