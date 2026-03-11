@@ -238,10 +238,25 @@ APPLESCRIPT
 
 if [ -n "$WINDOW_BOUNDS" ]; then
     IFS=':' read -r WIN_X WIN_Y WIN_W WIN_H <<< "$WINDOW_BOUNDS"
+
+    # Detect Retina scale factor: AppleScript returns logical points,
+    # but ffmpeg avfoundation captures at rendered pixel resolution.
+    SCALE_FACTOR=$(osascript -l JavaScript -e \
+        'ObjC.import("AppKit"); Math.round($.NSScreen.mainScreen.backingScaleFactor)' 2>/dev/null || echo 0)
+    if [ "$SCALE_FACTOR" -lt 1 ] 2>/dev/null; then
+        SCALE_FACTOR=$( [ "$(uname -m)" = "arm64" ] && echo 2 || echo 1 )
+    fi
+
+    # Apply scale factor to convert logical points → physical pixels
+    WIN_X=$(( WIN_X * SCALE_FACTOR ))
+    WIN_Y=$(( WIN_Y * SCALE_FACTOR ))
+    WIN_W=$(( WIN_W * SCALE_FACTOR ))
+    WIN_H=$(( WIN_H * SCALE_FACTOR ))
+
     # Ensure dimensions are even (required by libx264)
     WIN_W=$(( (WIN_W / 2) * 2 ))
     WIN_H=$(( (WIN_H / 2) * 2 ))
-    log "Recording window at (${WIN_X},${WIN_Y}) ${WIN_W}x${WIN_H}"
+    log "Recording window at (${WIN_X},${WIN_Y}) ${WIN_W}x${WIN_H} (scale=${SCALE_FACTOR}x)"
 
     ffmpeg -y -f avfoundation \
         -capture_cursor 1 -capture_mouse_clicks 1 \
