@@ -16,6 +16,7 @@ TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 SESSION_NAME="evo_session_${TIMESTAMP}"
 RECORDING_FILE="$HOME/Desktop/${SESSION_NAME}.mp4"
 BITRATE="1000k"
+SKIP_PUSH=false
 
 # New repo will be created alongside the source repo
 WORK_REPO="$(dirname "$SOURCE_DIR")/nano_agent_team_selfevolve_${TIMESTAMP}"
@@ -67,7 +68,47 @@ log "PHASE 0: Created new repo at ${WORK_REPO}"
 # 2. Enter the new repo — all subsequent work happens here
 cd "$WORK_REPO"
 
-# 3. Create 'original' branch from main (snapshot of pre-evolution state)
+# 3. Create a NEW GitHub repo and point origin to it
+#    Extract token and org from source repo's origin URL
+SOURCE_REMOTE=$(git remote get-url origin 2>/dev/null || true)
+GH_TOKEN=$(echo "$SOURCE_REMOTE" | grep -o 'ghp_[^@]*' || true)
+GH_ORG=$(echo "$SOURCE_REMOTE" | sed -n 's|.*github.com[:/]\([^/]*\)/.*|\1|p' || true)
+
+NEW_REPO_NAME="nano_agent_team_selfevolve_${TIMESTAMP}"
+
+if [ -n "$GH_TOKEN" ] && [ -n "$GH_ORG" ]; then
+    log "Creating new GitHub repo: ${GH_ORG}/${NEW_REPO_NAME}"
+    HTTP_CODE=$(curl -s -o /tmp/gh_create_repo.json -w "%{http_code}" \
+        -X POST "https://api.github.com/orgs/${GH_ORG}/repos" \
+        -H "Authorization: token ${GH_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"${NEW_REPO_NAME}\",\"private\":false,\"description\":\"Self-evolution session ${TIMESTAMP}\"}")
+
+    # If org repo creation fails (403/404), try as user repo
+    if [ "$HTTP_CODE" != "201" ]; then
+        log "Org repo creation returned $HTTP_CODE, trying as user repo..."
+        HTTP_CODE=$(curl -s -o /tmp/gh_create_repo.json -w "%{http_code}" \
+            -X POST "https://api.github.com/user/repos" \
+            -H "Authorization: token ${GH_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"${NEW_REPO_NAME}\",\"private\":false,\"description\":\"Self-evolution session ${TIMESTAMP}\"}")
+    fi
+
+    if [ "$HTTP_CODE" = "201" ]; then
+        NEW_REMOTE="https://${GH_TOKEN}@github.com/${GH_ORG}/${NEW_REPO_NAME}.git"
+        git remote set-url origin "$NEW_REMOTE"
+        log "Remote origin set to new repo: ${GH_ORG}/${NEW_REPO_NAME}"
+    else
+        log "WARNING: Failed to create GitHub repo (HTTP $HTTP_CODE). Push phase will be skipped."
+        cat /tmp/gh_create_repo.json >> "$LOG_FILE" 2>/dev/null || true
+        SKIP_PUSH=true
+    fi
+else
+    log "WARNING: Could not extract GitHub token/org from source remote. Push phase will be skipped."
+    SKIP_PUSH=true
+fi
+
+# 4. Create 'original' branch from main (snapshot of pre-evolution state)
 git checkout -b original
 log "Created 'original' branch from main"
 
@@ -272,9 +313,13 @@ COMMIT_DELIM
     log "Changes committed."
 fi
 
-# Push main branch to remote
-git push origin main
-log "Pushed main to GitHub."
+# Push to new remote (all branches including evolution/*)
+if [ "${SKIP_PUSH:-}" = "true" ]; then
+    log "Skipping push (no remote repo created)."
+else
+    git push origin --all
+    log "Pushed all branches to new GitHub repo."
+fi
 
 # ═══════════════════════════════════════════════════════════════
 # PHASE 6: Stop recording

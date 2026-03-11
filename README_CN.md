@@ -1,23 +1,10 @@
-而 watchdog 的核心应该是，
-1. watchdog 只是做任务规划和监控，不直接干预执行
-2. agent 只规定 role（能做什么），任务面板公布现在的任务，由 agent 认领，watchdog 的核心是拆解出任务和可以完成任务的角色
-
-
-c7007c7a9dc22c74f166cffd60eb922f302fa02c3676629bd271bf07f06c3594
-
-
-
-以下是这段技术文档的**精准、专业且符合中文技术文档表达习惯**的完整翻译，保留了关键技术术语的统一性和操作指令的可读性：
-
----
-
 # nano_agent_team_selfevolve
 
-English (this page) | [中文文档](README_CN.md)
+[English](README.md) | 中文文档（本页）
 
-`nano_agent_team_selfevolve` 是基于 `nano_agent_team` 开发的轻量级二次开发分支，核心目标是新增无人值守的自进化工作流。
+`nano_agent_team_selfevolve` 是基于 [`nano_agent_team`](https://github.com/zczc/nano_agent_team) 开发的轻量级二次开发分支，核心目标是新增无人值守的自进化工作流。
 
-如需查看完整框架文档（架构、TUI/CLI 细节、工具系统），请参考该代码库中的上游 README 文件。
+如需查看完整框架文档（架构、TUI/CLI 细节、工具系统），请参考[上游 README](https://github.com/zczc/nano_agent_team)。
 
 ## 本代码库新增内容
 
@@ -35,7 +22,8 @@ English (this page) | [中文文档](README_CN.md)
 ### 1. 安装
 
 ```bash
-cd /Users/zc/PycharmProjects/nano_agent_team_selfevolve
+git clone https://github.com/nanoAgentTeam/nano_agent_team_selfevolve.git
+cd nano_agent_team_selfevolve
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

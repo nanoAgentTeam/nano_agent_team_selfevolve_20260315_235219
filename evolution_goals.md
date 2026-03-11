@@ -20,6 +20,10 @@ The evolution process should prioritize improvements that **users can see and fe
 - Middleware or utilities that exist only to be "architecturally correct" but add no capability.
 - Wrapping existing functionality in a new abstraction without enabling new use cases.
 
+## Evolution Theme
+
+Read `{{root_path}}/evolution_theme.md` for the **current evolution theme**. If set, research and proposals should align with the theme. This file is the user's steering mechanism for evolution direction.
+
 ## Evolution Surface Areas
 
 The TUI (`src/tui/`) is now open for evolution. Consider the full surface:

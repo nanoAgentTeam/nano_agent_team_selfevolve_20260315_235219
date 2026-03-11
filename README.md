@@ -2,9 +2,9 @@
 
 English (this page) | [中文文档](README_CN.md)
 
-`nano_agent_team_selfevolve` is a lightweight secondary development branch based on `nano_agent_team`, focused on adding an unattended self-evolution workflow.
+`nano_agent_team_selfevolve` is a lightweight secondary development branch based on [`nano_agent_team`](https://github.com/zczc/nano_agent_team), focused on adding an unattended self-evolution workflow.
 
-For full framework documentation (architecture, TUI/CLI details, tool system), refer to the upstream README in that repository.
+For full framework documentation (architecture, TUI/CLI details, tool system), refer to the [upstream README](https://github.com/zczc/nano_agent_team).
 
 ## What This Repo Adds
 
@@ -22,7 +22,8 @@ Compared with upstream `nano_agent_team`, this repo mainly adds and wires the se
 ### 1. Install
 
 ```bash
-cd /Users/zc/PycharmProjects/nano_agent_team_selfevolve
+git clone https://github.com/nanoAgentTeam/nano_agent_team_selfevolve.git
+cd nano_agent_team_selfevolve
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

@@ -9,17 +9,23 @@ Before starting research, claim Task 1 from `central_plan.md`:
 1. `blackboard(operation="read_index", filename="central_plan.md")` — get current checksum
 2. `blackboard(operation="update_task", task_id=1, updates={"status": "IN_PROGRESS", "assignees": ["Researcher"]}, expected_checksum="<checksum>")`
 
-## Step 1 — Understand the framework and its goals (parallel reads)
+## Step 1 — Understand the framework, its goals, and current theme (parallel reads)
 ```
 read_file → {{root_path}}/evolution_goals.md
+read_file → {{root_path}}/evolution_theme.md
 glob(pattern="*.py", path="{{blackboard}}/resources/workspace/backend/tools")
 glob(pattern="*.py", path="{{blackboard}}/resources/workspace/src/core/middlewares")
 glob(pattern="*.py", path="{{blackboard}}/resources/workspace/src/tui/screens")
 ```
 Skim 2-3 files to understand what the framework does, how it's used, and what the TUI looks like.
 
+**Theme awareness**: If `evolution_theme.md` exists and is non-empty, treat it as the current evolution theme. At least **half** of your search angles in Step 2 MUST relate to the theme. If the file is missing or empty, ignore this rule and use free exploration.
+
 ## Step 2 — Search for real user pain points and hot topics
-Formulate **4–6 searches** from different angles (reliability, observability, new interaction patterns, cost management, agent architectures, etc.). Do NOT use the same angle twice. Each search should come from a genuine hypothesis. Use `web_reader` on the 1-2 most interesting results.
+Formulate **4–6 searches** from different angles. Do NOT use the same angle twice. Each search should come from a genuine hypothesis. Use `web_reader` on the 1-2 most interesting results.
+
+Angle inspiration (pick from these OR invent your own — do NOT repeat the same angles every round):
+competitive/adversarial AI, agent self-reflection, developer experience, visualization, gamification, code archaeology, semantic analysis, creative AI applications, reliability, observability, cost management, agent architectures, interaction patterns.
 
 ## Step 3 — Connect findings back to this framework
 For each interesting finding, ask: can this be added in ONE small, testable round?
