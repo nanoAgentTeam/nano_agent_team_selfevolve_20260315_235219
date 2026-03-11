@@ -19,6 +19,7 @@ class EvolutionOutputFilter(io.TextIOBase):
         self._buf = ""
         self._tool_batch = []
         self._shown_text = False
+        self._llm_lines = []
 
     def write(self, text):
         if self._log:
@@ -35,9 +36,13 @@ class EvolutionOutputFilter(io.TextIOBase):
         self._terminal.write(f"{ts} ── {tag:7s} ── {content}\n")
         self._terminal.flush()
 
+    def _trunc(self, text, limit=75):
+        return (text[:limit] + "...") if len(text) > limit else text
+
     def _flush_tools(self):
         if self._tool_batch:
-            self._out("tool", ", ".join(self._tool_batch))
+            for item in self._tool_batch:
+                self._out("tool", self._trunc(item))
             self._tool_batch = []
 
     def _handle(self, line):
@@ -45,12 +50,14 @@ class EvolutionOutputFilter(io.TextIOBase):
         if not s or all(c == "-" for c in s):
             return
 
-        # Tool call -> collect just the tool name
+        # Tool call -> extract name + args summary
         if "[Tool Call]" in line:
             self._shown_text = False
             try:
-                name = line.split("[Tool Call] ", 1)[1].split("(", 1)[0]
-                self._tool_batch.append(name)
+                raw = line.split("[Tool Call] ", 1)[1]
+                # Flatten newlines in args
+                flat = raw.replace("\n", "\\n").replace("\r", "")
+                self._tool_batch.append(flat)
             except Exception:
                 pass
             return
@@ -73,15 +80,20 @@ class EvolutionOutputFilter(io.TextIOBase):
                 tag = line.split("]", 1)[0] + "]" if "]" in line else ""
                 self._out("system", f"{tag} Booting up...")
             else:
-                self._out("system", s)
+                self._out("system", self._trunc(s))
             return
 
-        # LLM text -> show first line per block, truncated
-        if not self._shown_text and len(s) > 2:
+        # LLM text -> accumulate lines, show as one condensed block
+        if len(s) > 2:
             self._flush_tools()
-            show = (s[:200] + "...") if len(s) > 200 else s
-            self._out("message", show)
-            self._shown_text = True
+            if not self._shown_text:
+                self._llm_lines = [s]
+                self._shown_text = True
+            else:
+                self._llm_lines.append(s)
+            # Continuously update the displayed message (overwrite with latest condensed view)
+            condensed = " | ".join(self._llm_lines)
+            self._out("message", self._trunc(condensed))
 
     def flush(self):
         self._flush_tools()
