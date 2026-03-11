@@ -36,7 +36,7 @@ class EvolutionOutputFilter(io.TextIOBase):
         self._terminal.write(f"{ts} ── {tag:7s} ── {content}\n")
         self._terminal.flush()
 
-    def _trunc(self, text, limit=75):
+    def _trunc(self, text, limit=150):
         return (text[:limit] + "...") if len(text) > limit else text
 
     def _flush_tools(self):
@@ -45,6 +45,14 @@ class EvolutionOutputFilter(io.TextIOBase):
                 self._out("tool", self._trunc(item))
             self._tool_batch = []
 
+    def _flush_llm(self):
+        """Output accumulated LLM text as one condensed line, then reset."""
+        if self._llm_lines:
+            condensed = " | ".join(self._llm_lines)
+            self._out("message", self._trunc(condensed))
+            self._llm_lines = []
+            self._shown_text = False
+
     def _handle(self, line):
         s = line.strip()
         if not s or all(c == "-" for c in s):
@@ -52,7 +60,7 @@ class EvolutionOutputFilter(io.TextIOBase):
 
         # Tool call -> extract name + args summary
         if "[Tool Call]" in line:
-            self._shown_text = False
+            self._flush_llm()
             try:
                 raw = line.split("[Tool Call] ", 1)[1]
                 flat = raw.replace("\n", "\\n").replace("\r", "")
@@ -69,6 +77,7 @@ class EvolutionOutputFilter(io.TextIOBase):
 
         # Tool result -> suppress, flush pending tool batch
         if "[Tool Result]" in line:
+            self._flush_llm()
             self._flush_tools()
             return
 
@@ -80,6 +89,7 @@ class EvolutionOutputFilter(io.TextIOBase):
             "Connection error", "Retrying engine", "Critical Error",
             "Registered in blackboard", "Blackboard:",
         )):
+            self._flush_llm()
             self._flush_tools()
             if "Booting up with role:" in line:
                 tag = line.split("]", 1)[0] + "]" if "]" in line else ""
@@ -88,19 +98,13 @@ class EvolutionOutputFilter(io.TextIOBase):
                 self._out("system", self._trunc(s))
             return
 
-        # LLM text -> accumulate lines, show as one condensed block
+        # LLM text -> accumulate silently, output only when block ends
         if len(s) > 2:
             self._flush_tools()
-            if not self._shown_text:
-                self._llm_lines = [s]
-                self._shown_text = True
-            else:
-                self._llm_lines.append(s)
-            # Continuously update the displayed message (overwrite with latest condensed view)
-            condensed = " | ".join(self._llm_lines)
-            self._out("message", self._trunc(condensed))
+            self._llm_lines.append(s)
 
     def flush(self):
+        self._flush_llm()
         self._flush_tools()
         if self._log:
             self._log.flush()
