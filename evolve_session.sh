@@ -164,42 +164,115 @@ if [ -d "$SOURCE_DIR/.venv" ]; then
 fi
 
 # 4. Create a NEW GitHub repo and point origin to it
-#    Extract token and org from source repo's origin URL
+#    Try multiple methods in order: gh CLI → curl+gh-token → curl+url-token → SSH
 SOURCE_REMOTE=$(git remote get-url origin 2>/dev/null || true)
-GH_TOKEN=$(echo "$SOURCE_REMOTE" | grep -o 'ghp_[^@]*' || true)
 GH_ORG=$(echo "$SOURCE_REMOTE" | sed -n 's|.*github.com[:/]\([^/]*\)/.*|\1|p' || true)
-
 NEW_REPO_NAME="nano_agent_team_selfevolve_${TIMESTAMP}"
+REPO_CREATED=false
 
-if [ -n "$GH_TOKEN" ] && [ -n "$GH_ORG" ]; then
-    log "Creating new GitHub repo: ${GH_ORG}/${NEW_REPO_NAME}"
-    HTTP_CODE=$(curl -s -o /tmp/gh_create_repo.json -w "%{http_code}" \
-        -X POST "https://api.github.com/orgs/${GH_ORG}/repos" \
-        -H "Authorization: token ${GH_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -d "{\"name\":\"${NEW_REPO_NAME}\",\"private\":false,\"description\":\"Self-evolution session ${TIMESTAMP}\"}")
+# Helper: try creating repo via GitHub API with a given token
+try_create_repo_api() {
+    local token="$1"
+    local org="$2"
+    local repo="$3"
+    local http_code
 
-    # If org repo creation fails (403/404), try as user repo
-    if [ "$HTTP_CODE" != "201" ]; then
-        log "Org repo creation returned $HTTP_CODE, trying as user repo..."
-        HTTP_CODE=$(curl -s -o /tmp/gh_create_repo.json -w "%{http_code}" \
-            -X POST "https://api.github.com/user/repos" \
-            -H "Authorization: token ${GH_TOKEN}" \
+    # Try as org repo first
+    if [ -n "$org" ]; then
+        http_code=$(curl -s -o /tmp/gh_create_repo.json -w "%{http_code}" \
+            -X POST "https://api.github.com/orgs/${org}/repos" \
+            -H "Authorization: token ${token}" \
             -H "Content-Type: application/json" \
-            -d "{\"name\":\"${NEW_REPO_NAME}\",\"private\":false,\"description\":\"Self-evolution session ${TIMESTAMP}\"}")
+            -d "{\"name\":\"${repo}\",\"private\":false,\"description\":\"Self-evolution session ${TIMESTAMP}\"}")
+        if [ "$http_code" = "201" ]; then
+            echo "${org}/${repo}"; return 0
+        fi
     fi
+    # Fallback: try as user repo
+    http_code=$(curl -s -o /tmp/gh_create_repo.json -w "%{http_code}" \
+        -X POST "https://api.github.com/user/repos" \
+        -H "Authorization: token ${token}" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"${repo}\",\"private\":false,\"description\":\"Self-evolution session ${TIMESTAMP}\"}")
+    if [ "$http_code" = "201" ]; then
+        local owner=$(cat /tmp/gh_create_repo.json | grep -o '"full_name":"[^"]*"' | cut -d'"' -f4)
+        echo "${owner:-${repo}}"; return 0
+    fi
+    return 1
+}
 
-    if [ "$HTTP_CODE" = "201" ]; then
-        NEW_REMOTE="https://${GH_TOKEN}@github.com/${GH_ORG}/${NEW_REPO_NAME}.git"
-        git remote set-url origin "$NEW_REMOTE"
-        log "Remote origin set to new repo: ${GH_ORG}/${NEW_REPO_NAME}"
+FULL_REPO="${GH_ORG:+${GH_ORG}/}${NEW_REPO_NAME}"
+
+# ── Method 1: gh CLI ──
+if [ "$REPO_CREATED" = "false" ] && command -v gh &>/dev/null && gh auth status &>/dev/null; then
+    log "Trying GitHub repo creation via gh CLI..."
+    if gh repo create "$FULL_REPO" --public \
+        --description "Self-evolution session ${TIMESTAMP}" 2>>"$LOG_FILE"; then
+        git remote set-url origin "https://github.com/${FULL_REPO}.git"
+        log "✓ Created repo via gh CLI: ${FULL_REPO}"
+        REPO_CREATED=true
     else
-        log "WARNING: Failed to create GitHub repo (HTTP $HTTP_CODE). Push phase will be skipped."
-        cat /tmp/gh_create_repo.json >> "$LOG_FILE" 2>/dev/null || true
-        SKIP_PUSH=true
+        log "✗ gh CLI repo creation failed, trying next method..."
     fi
-else
-    log "WARNING: Could not extract GitHub token/org from source remote. Push phase will be skipped."
+fi
+
+# ── Method 2: curl + token from gh auth ──
+if [ "$REPO_CREATED" = "false" ] && command -v gh &>/dev/null; then
+    GH_TOKEN_FROM_CLI=$(gh auth token 2>/dev/null || true)
+    if [ -n "$GH_TOKEN_FROM_CLI" ]; then
+        log "Trying GitHub repo creation via API (gh auth token)..."
+        CREATED_REPO=$(try_create_repo_api "$GH_TOKEN_FROM_CLI" "$GH_ORG" "$NEW_REPO_NAME") && {
+            git remote set-url origin "https://github.com/${CREATED_REPO}.git"
+            log "✓ Created repo via API (gh token): ${CREATED_REPO}"
+            FULL_REPO="$CREATED_REPO"
+            REPO_CREATED=true
+        } || log "✗ API creation with gh token failed, trying next method..."
+    fi
+fi
+
+# ── Method 3: curl + token embedded in remote URL ──
+if [ "$REPO_CREATED" = "false" ]; then
+    GH_TOKEN_FROM_URL=$(echo "$SOURCE_REMOTE" | grep -o 'ghp_[^@]*' || true)
+    if [ -n "$GH_TOKEN_FROM_URL" ]; then
+        log "Trying GitHub repo creation via API (URL-embedded token)..."
+        CREATED_REPO=$(try_create_repo_api "$GH_TOKEN_FROM_URL" "$GH_ORG" "$NEW_REPO_NAME") && {
+            git remote set-url origin "https://${GH_TOKEN_FROM_URL}@github.com/${CREATED_REPO}.git"
+            log "✓ Created repo via API (URL token): ${CREATED_REPO}"
+            FULL_REPO="$CREATED_REPO"
+            REPO_CREATED=true
+        } || log "✗ API creation with URL token failed, trying next method..."
+    fi
+fi
+
+# ── Method 4: curl + token from GITHUB_TOKEN env ──
+if [ "$REPO_CREATED" = "false" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+    log "Trying GitHub repo creation via API (GITHUB_TOKEN env)..."
+    CREATED_REPO=$(try_create_repo_api "$GITHUB_TOKEN" "$GH_ORG" "$NEW_REPO_NAME") && {
+        git remote set-url origin "https://github.com/${CREATED_REPO}.git"
+        log "✓ Created repo via API (GITHUB_TOKEN): ${CREATED_REPO}"
+        FULL_REPO="$CREATED_REPO"
+        REPO_CREATED=true
+    } || log "✗ API creation with GITHUB_TOKEN failed, trying next method..."
+fi
+
+# ── Method 5: SSH — no repo creation, push to existing org via SSH ──
+if [ "$REPO_CREATED" = "false" ] && [ -n "$GH_ORG" ]; then
+    SSH_REMOTE="git@github.com:${GH_ORG}/${NEW_REPO_NAME}.git"
+    log "Trying SSH remote (requires repo to exist or manual creation): ${SSH_REMOTE}"
+    git remote set-url origin "$SSH_REMOTE"
+    # We can't create the repo via SSH, but maybe it already exists
+    if git ls-remote "$SSH_REMOTE" &>/dev/null 2>&1; then
+        log "✓ SSH remote accessible: ${SSH_REMOTE}"
+        FULL_REPO="${GH_ORG}/${NEW_REPO_NAME}"
+        REPO_CREATED=true
+    else
+        log "✗ SSH remote not accessible."
+    fi
+fi
+
+if [ "$REPO_CREATED" = "false" ]; then
+    log "WARNING: All GitHub repo creation methods failed. Push phase will be skipped."
+    log "  To fix: run 'gh auth login' or set GITHUB_TOKEN env var."
     SKIP_PUSH=true
 fi
 
