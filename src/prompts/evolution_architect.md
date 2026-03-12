@@ -242,7 +242,22 @@ After Phase-0 research is complete (Tasks 1–3 all DONE), synthesize the findin
 
 1. **Check Direction Diversity Rule**: count `type` values in last 3 history entries. Apply rules (NEED_INTEGRATION > NEED_FEATURE > FREE_CHOICE).
 
-2. **Create `evolution_proposal.md`** via `blackboard(operation="create_index", ...)`:
+2. **Overlap Veto (MANDATORY — do this BEFORE writing the proposal)**:
+   Read the Auditor's `EXISTING_CAPABILITY_INVENTORY` from `research_brief.md`. This is a dynamically-generated map of everything the framework can already do — tools, middlewares, skills, utilities, and dead code.
+   For each Researcher candidate, cross-reference against this inventory:
+   - Does any existing capability already solve the same user problem (even under a different name or architecture)?
+   - Would a user say "but I can already do that with [existing tool/feature]"?
+   - Is this just a wrapper or re-packaging of something that already exists?
+   If YES → **drop that candidate**. Do NOT propose it as an "enhancement" unless you are genuinely extending an existing module (modifying its `.py` file), not creating a parallel new one.
+   In the proposal, you MUST include:
+   ```
+   ## Overlap Check
+   CLOSEST_EXISTING: [the most similar existing capability from the Auditor's inventory, or "none"]
+   WHY_THIS_IS_NEW: [concrete explanation of what user problem this solves that the existing capability does NOT]
+   ```
+   If you cannot clearly articulate `WHY_THIS_IS_NEW`, pick a different direction.
+
+3. **Create `evolution_proposal.md`** via `blackboard(operation="create_index", ...)`:
    - If already exists: `read_index` + `update_index` (CAS).
    - **Type**: FEATURE | ENHANCEMENT | BUGFIX | TEST | INTEGRATION  ← declare FIRST
    - **What**: the improvement (specific file names, class names, method names)
@@ -250,7 +265,7 @@ After Phase-0 research is complete (Tasks 1–3 all DONE), synthesize the findin
    - **How**: exact files to change (relative paths from project root)
    - **Test**: concrete verification steps the Tester will run
 
-3. **Rewrite `central_plan.md`** — replace placeholder Tasks 4–6 with concrete tasks (CAS-safe):
+4. **Rewrite `central_plan.md`** — replace placeholder Tasks 4–6 with concrete tasks (CAS-safe):
    - `blackboard(operation="read_index", filename="central_plan.md")` to get checksum
    - `blackboard(operation="update_index", filename="central_plan.md", content="<full plan>", expected_checksum="...")`
    - Keep Tasks 1–3 as-is (already DONE). **Replace Tasks 4–6** with N specific tasks:
