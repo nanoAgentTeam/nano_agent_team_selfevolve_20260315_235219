@@ -244,6 +244,57 @@ def check_dual_entry_wiring(workspace: str, changed_files: list[str]) -> list[st
     return warnings
 
 
+def check_tests(workspace: str, changed_files: list[str]) -> list[str]:
+    """Run pytest on test files related to changed files."""
+    errors = []
+
+    # Find test files: either directly changed, or matching changed modules
+    test_files = [f for f in changed_files if f.startswith("tests/") and f.endswith(".py")]
+
+    # Also find test files for changed non-test modules
+    for f in changed_files:
+        if f.startswith("tests/") or not f.endswith(".py"):
+            continue
+        basename = os.path.splitext(os.path.basename(f))[0]
+        # Common test file patterns
+        for pattern in [f"tests/test_{basename}.py", f"tests/{basename}_test.py"]:
+            full = os.path.join(workspace, pattern)
+            if os.path.exists(full) and pattern not in test_files:
+                test_files.append(pattern)
+
+    if not test_files:
+        return []  # No tests to run — not an error
+
+    # Verify test files exist
+    existing_tests = [f for f in test_files if os.path.exists(os.path.join(workspace, f))]
+    if not existing_tests:
+        return []
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest"] + existing_tests + ["-v", "--tb=short", "-q"],
+            capture_output=True, text=True,
+            cwd=workspace,
+            env={**os.environ, "PYTHONPATH": workspace},
+            timeout=120
+        )
+        if result.returncode != 0:
+            # Extract failure summary
+            output = result.stdout.strip()
+            # Get last 20 lines for summary
+            summary_lines = output.split("\n")[-20:]
+            errors.append(
+                f"PYTEST FAILED (exit code {result.returncode}):\n"
+                + "\n".join(summary_lines)
+            )
+    except subprocess.TimeoutExpired:
+        errors.append("PYTEST TIMEOUT: tests took >120s")
+    except Exception as e:
+        errors.append(f"PYTEST ERROR: {e}")
+
+    return errors
+
+
 def check_duplication(workspace: str, changed_files: list[str]) -> list[str]:
     """Check for potential duplication with existing modules."""
     warnings = []
@@ -312,31 +363,37 @@ def main():
     all_warnings = []
 
     # Check 1: Protected files
-    print("[1/5] Checking protected files...")
+    print("[1/6] Checking protected files...")
     errors = check_protected_files(changed_files)
     all_errors.extend(errors)
     print(f"  {'FAIL' if errors else 'PASS'} ({len(errors)} violations)")
 
     # Check 2: Syntax
-    print("[2/5] Checking syntax...")
+    print("[2/6] Checking syntax...")
     errors = check_syntax(workspace, changed_files)
     all_errors.extend(errors)
     print(f"  {'FAIL' if errors else 'PASS'} ({len(errors)} errors)")
 
     # Check 3: Imports
-    print("[3/5] Checking imports...")
+    print("[3/6] Checking imports...")
     errors = check_imports(workspace, changed_files)
     all_errors.extend(errors)
     print(f"  {'FAIL' if errors else 'PASS'} ({len(errors)} errors)")
 
     # Check 4: Dual entry wiring
-    print("[4/5] Checking dual entry point wiring...")
+    print("[4/6] Checking dual entry point wiring...")
     errors = check_dual_entry_wiring(workspace, changed_files)
     all_errors.extend(errors)
     print(f"  {'FAIL' if errors else 'PASS'} ({len(errors)} issues)")
 
-    # Check 5: Duplication (warning only, not blocking)
-    print("[5/5] Checking for duplication...")
+    # Check 5: Run tests
+    print("[5/6] Running pytest...")
+    errors = check_tests(workspace, changed_files)
+    all_errors.extend(errors)
+    print(f"  {'FAIL' if errors else 'PASS'} ({len(errors)} failures)")
+
+    # Check 6: Duplication (warning only, not blocking)
+    print("[6/6] Checking for duplication...")
     warnings = check_duplication(workspace, changed_files)
     all_warnings.extend(warnings)
     print(f"  {'WARN' if warnings else 'PASS'} ({len(warnings)} warnings)")

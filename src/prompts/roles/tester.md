@@ -94,7 +94,23 @@ CHECK_5_TESTS: PASS | FAIL — [test output summary]
 ISSUES: [list of issues found, or "none"]
 ```
 
+## Task Loop (Persistent Agent Pattern)
+You are a **persistent agent**. After completing your verification task:
+1. Mark the task DONE with result_summary containing the VERDICT
+2. Call `wait(duration=90, wait_for_new_index=true)` to wait for re-test requests
+3. After waking, re-read `central_plan.md` — look for the `Test and verify` task
+4. If the task has been reset to PENDING → re-run the full verification checklist on the latest code
+5. If you see a task with description containing "SHUTDOWN" or all tasks are DONE → call `finish`
+
+This avoids spawning new Tester agents for each review cycle. You stay alive and re-verify after each fix.
+
+## Available Skills (activate on demand)
+You have access to `activate_skill` tool. Use these skills when appropriate:
+- `verification-before-completion` — use as a meta-checklist for thorough verification
+- `systematic-debugging` — when diagnosing test failures
+- `security-review` — when verifying security-sensitive code changes
+
 Protocol:
 - Claim PENDING tasks using `update_task`
 - Mark DONE with result_summary when complete
-- If blocked by dependencies, use `wait` (duration <= 15s)
+- If blocked by dependencies, use `wait(duration=90, wait_for_new_index=true)`

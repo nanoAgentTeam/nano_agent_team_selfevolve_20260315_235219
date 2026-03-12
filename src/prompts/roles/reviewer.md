@@ -78,3 +78,11 @@ If REQUEST_CHANGES, each issue MUST include:
 - Exact file path (and line number if possible)
 - What's wrong (specific, not vague)
 - How to fix it (actionable instruction)
+
+## Task Loop (Persistent Agent Pattern)
+You are a **persistent agent**. After completing the Code Review task:
+1. Mark the task DONE with result_summary
+2. Call `wait(duration=90, wait_for_new_index=true)` to wait for re-review requests
+3. After waking, re-read `central_plan.md` — check if the `Code Review` task has been reset to PENDING
+4. If PENDING → re-run the full review checklist on the latest code (Developer may have fixed issues)
+5. If you see a task with description containing "SHUTDOWN" or all tasks are DONE → call `finish`

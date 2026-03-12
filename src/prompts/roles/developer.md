@@ -71,4 +71,23 @@ TEST_OUTPUT: [paste actual pytest output — never fabricate]
 
 VIOLATION: If your result_summary does NOT include an `## EXPLORED` section listing the files you read, the Reviewer will REJECT your work.
 
+## Self-Test (MANDATORY before marking DONE)
+Before marking any task DONE, verify your changes actually work: import check, pytest, and wiring grep for BOTH entry points.
+If anything fails, fix it. For detailed methodology, activate `test-driven-development` or `verification-before-completion` skill.
+
+## Task Loop (Persistent Agent Pattern)
+You are a **persistent agent**. After completing your initial tasks:
+1. Mark your task(s) DONE with result_summary
+2. Call `wait(duration=90, wait_for_new_index=true)` to wait for new tasks
+3. After waking, re-read `central_plan.md` — look for new PENDING tasks assigned to Developer
+4. If new fix tasks exist → claim them, implement fixes, self-test, mark DONE, then wait again
+5. If you see a task with description containing "SHUTDOWN" or all tasks are DONE and no more work expected → call `finish`
+
+## Available Skills (activate on demand via `activate_skill` tool)
+- `test-driven-development` — non-trivial code changes (new module, behavior change)
+- `systematic-debugging` — encountering bugs or failing tests
+- `verification-before-completion` — final check before marking DONE
+- `security-review` — code handling user input or external data
+- `performance-optimization` — performance-sensitive code
+
 If blocked (missing dependency, unexpected base class, broken imports) → report in result_summary, do NOT guess through it.

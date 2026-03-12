@@ -54,6 +54,54 @@ class EvolutionWorkspaceTool(BaseTool):
             "required": ["verdict", "round_num"]
         }
 
+    def _run_quality_gate(self, root: str, workspace: str, _log) -> str | None:
+        """
+        Run evolution_gate.py against the workspace.
+        Returns None if gate passes, or an error string if it fails.
+        The gate is MANDATORY — evolution_workspace refuses to commit if it fails.
+        """
+        gate_script = os.path.join(root, "scripts", "evolution_gate.py")
+        if not os.path.exists(gate_script):
+            _log("WARNING: evolution_gate.py not found, skipping gate")
+            return None
+
+        import sys
+        # Prefer .venv python; fallback to current interpreter; last resort: bare python3
+        venv_python = os.path.join(root, ".venv", "bin", "python")
+        if os.path.exists(venv_python):
+            python = venv_python
+        else:
+            python = sys.executable or "python3"
+
+        _log(f"Running quality gate: {gate_script}")
+        try:
+            gate = subprocess.run(
+                [python, gate_script, workspace],
+                capture_output=True, text=True,
+                cwd=workspace,
+                env={**os.environ, "PYTHONPATH": workspace},
+                timeout=120
+            )
+            _log(f"Gate exit code: {gate.returncode}")
+            if gate.stdout.strip():
+                for line in gate.stdout.strip().split("\n"):
+                    _log(f"  gate: {line}")
+
+            if gate.returncode != 0:
+                return (
+                    f"QUALITY GATE FAILED (exit code {gate.returncode}). "
+                    f"PASS is BLOCKED. Fix the issues or call with verdict=FAIL.\n\n"
+                    f"Gate output:\n{gate.stdout.strip()}\n{gate.stderr.strip()}"
+                )
+        except subprocess.TimeoutExpired:
+            return "QUALITY GATE TIMEOUT (>120s). PASS is BLOCKED."
+        except Exception as e:
+            _log(f"Gate execution error: {e}")
+            # Don't block on gate infrastructure failure
+            return None
+
+        return None  # Gate passed
+
     @schema_strict_validator
     def execute(
         self,
@@ -90,6 +138,11 @@ class EvolutionWorkspaceTool(BaseTool):
                 capture_output=True, text=True
             )
             evolution_branch = branch_result.stdout.strip() or f"evolution/r{round_num}"
+
+            # 0.5 MANDATORY: Run quality gate BEFORE committing
+            gate_result = self._run_quality_gate(root, workspace, _log)
+            if gate_result is not None:
+                return gate_result  # Gate failed — refuse to commit
 
             # 1. Auto-detect all changed files using git diff
             _log("Auto-detecting changed files via git diff...")

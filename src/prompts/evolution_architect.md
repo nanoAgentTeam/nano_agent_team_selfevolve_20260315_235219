@@ -263,22 +263,31 @@ After Phase-0 research is complete (Tasks 1–3 all DONE), synthesize the findin
 
 ### Phase 2: Iterative Development Loop (Implement → Test → Review → Decision)
 
-The development process is **iterative**. Each iteration consists of: Developer implements → Tester verifies → Reviewer reviews → you (Architect) decide whether to fix or finish.
+The development process is **iterative**. Agents are **persistent** — they stay alive across fix cycles, waiting for new tasks instead of exiting.
 
-**Iteration 1 (initial implementation):**
+**Step 1 — Spawn persistent agents (ONCE at the start):**
 
 1. **Workspace already exists** at `{{blackboard}}/resources/workspace/` (created in Pre-Phase 0).
 2. `spawn_swarm_agent` → **Spawn Developer(s)** for the implementation tasks in `central_plan.md`.
    - If there are multiple independent implementation tasks, spawn multiple Developers in parallel.
    - Each agent's goal should reference the specific task ID(s) and exact files.
-3. Monitor via `wait` + registry status until all implementation tasks are DONE.
-4. **Spawn Tester** → monitor until the `Test and verify` task is DONE.
-5. **Spawn Reviewer** → monitor until the `Code Review` task is DONE.
-6. **Decision step** — read the Reviewer's `result_summary` from `central_plan.md`:
-   - If `REVIEW_VERDICT: APPROVE` → **exit loop**, proceed to Phase 3 (Judge & Report).
-   - If `REVIEW_VERDICT: REQUEST_CHANGES` → **continue to next iteration** (see below).
+   - **Include in goal**: "After completing tasks, WAIT for new tasks (fix cycles). Do not call finish until you see SHUTDOWN or all tasks are DONE with no more fixes expected."
+3. `spawn_swarm_agent` → **Spawn Tester** with the same persistent pattern.
+   - Goal: "Wait for implementation tasks to complete, then verify. After verification, WAIT for re-test requests. Do not call finish until SHUTDOWN."
+4. `spawn_swarm_agent` → **Spawn Reviewer** with goal referencing the Code Review task.
 
-**Iteration 2+ (fix cycles):**
+**Step 2 — Monitor initial implementation:**
+- Monitor via `wait` + registry status until all implementation tasks are DONE.
+- Developer self-tests before marking DONE (import check, smoke test, wiring check).
+- When implementation tasks are DONE, Tester auto-picks up the `Test and verify` task.
+- When test task is DONE, Reviewer picks up the `Code Review` task.
+
+**Step 3 — Decision step:**
+Read the Reviewer's `result_summary` from `central_plan.md`:
+- If `REVIEW_VERDICT: APPROVE` → **exit loop**, proceed to Phase 3 (Judge & Report).
+- If `REVIEW_VERDICT: REQUEST_CHANGES` → **continue to fix cycle** (see below).
+
+**Fix cycles:**
 
 When the Reviewer reports `REQUEST_CHANGES`, do the following:
 1. **Add fix tasks** to `central_plan.md` via CAS-safe `update_index`:
@@ -286,18 +295,20 @@ When the Reviewer reports `REQUEST_CHANGES`, do the following:
    - Reset the `Test and verify` task: set `status: PENDING`, clear `assignees` and `result_summary`.
    - Reset the `Code Review` task: set `status: PENDING`, clear `assignees` and `result_summary`.
    - Set appropriate dependencies: fix tasks depend on nothing, test depends on fix tasks, review depends on test.
-2. **Spawn Developer** with goal: "Fix the issues from the code review: <paste Reviewer's ISSUES list>"
-3. Monitor → when fix tasks DONE, **Spawn Tester** → when test DONE, **Spawn Reviewer** → when review DONE.
-4. **Decision step again**: read Reviewer's result. APPROVE → exit loop. REQUEST_CHANGES → repeat.
+2. **Prefer reusing existing agents**: persistent agents will wake from `wait`, see new PENDING tasks, and pick them up. Only spawn new agents if you judge it necessary (e.g., existing agent is stuck, context is too polluted, or a different skill set is needed).
+3. Monitor → when fix tasks DONE, Tester re-runs → when test DONE, Reviewer re-runs → decision step again.
+4. APPROVE → exit loop. REQUEST_CHANGES → repeat.
 
 **Safety limit**: Max **3 iterations** total. If the 3rd review still returns REQUEST_CHANGES → declare the round **FAIL** and go to Phase 3.5 Recovery Protocol.
 
-**Agent Recovery Protocol (applies during ALL iterations):**
+**Agent Management Protocol:**
 - Each `wait` cycle, check the REAL-TIME SWARM STATUS in your system prompt.
-- If a Worker agent shows `status: DEAD` / `verified_status: DEAD` BUT its task is NOT DONE:
-  1. **Immediately** re-spawn a replacement agent with the SAME role and goal.
+- **Dead agents**: If a Worker shows `status: DEAD` / `verified_status: DEAD` BUT its task is NOT DONE:
+  1. Re-spawn a replacement agent with the SAME role and goal.
   2. Use `read_index` to get fresh checksum, then `update_task` to reset the stuck task's status back to PENDING (clear assignees).
   3. If the replacement also dies without completing → go to Phase 3.5 Recovery Protocol.
+- **Stuck/ineffective agents**: If an agent is RUNNING but making no progress (looping, confused, or context degraded), you MAY spawn a replacement. Reset the task to PENDING so the new agent can claim it.
+- **General principle**: Prefer reuse over re-spawn (persistent agents retain context). But your primary goal is delivering results — spawn as needed to keep the round moving.
 - Do NOT wait passively hoping a dead agent will recover — it won't.
 
 ### Phase 3: Judge & Report
