@@ -518,8 +518,16 @@ README_PROMPT=$(cat <<PROMPT_EOF
 
 ## README 应包含以下内容
 
+### ⚠️ 固定事实（必须原样使用，禁止修改）
+以下 URL、名称、作者信息是确定的事实，请在 README 中**原样引用**，不要猜测或修改：
+- 原始项目仓库: https://github.com/zczc/nano_agent_team
+- 原始项目名称: nano_agent_team
+- 本项目（演化分支）作者 GitHub: https://github.com/zczc
+- 本项目组织: https://github.com/nanoAgentTeam
+- 已有的 README 中出现的链接、引用，如果你不确定是否正确，请保持原样不动
+
 ### i. 项目背景
-- nano_agent_team_selfevolve 是基于 nano_agent_team 的二次开发分支
+- nano_agent_team_selfevolve 是基于 nano_agent_team (https://github.com/zczc/nano_agent_team) 的二次开发分支
 - 核心能力：无人值守的自我演化工作流（self-evolution workflow）
 - 多 agent 团队（Architect, Developer, Tester, Auditor, Reviewer 等）协作完成自主改进
 - 支持多种 LLM 提供商（Qwen, OpenAI, DeepSeek, Step, Moonshot 等）
