@@ -157,3 +157,8 @@ User mission
 **Changed**: backend/utils/agent_diagnosis/diagnosis_engine.py, backend/utils/agent_diagnosis/recovery_strategies.py, backend/utils/agent_diagnosis/__init__.py, .skills/agent_self_diagnosis/SKILL.md, tests/test_agent_self_diagnosis.py, docs/system_design.md
 **What it does**: Provides agents with self-monitoring capabilities to diagnose health issues (error rates, response times, success rates) and execute recovery strategies (retry, fallback, circuit breaker)
 **Wired into**: .skills/ directory (auto-discovered by skill_registry.py), documented in system_design.md
+
+### Round 8 — Session Replay Tool for debugging agent failures - includes SessionReplayTool, TraceCapture utility, SessionReplayScreen TUI component, /replay slash command, full test coverage, and wiring into both entry points (auto-logged 2026-03-15T18:44:02Z)
+**Changed**: backend/llm/tool_registry.py, backend/utils/__init__.py, main.py, src/tui/agent_bridge.py, src/tui/slash_commands.py, tests/test_tool_registry.py, backend/tools/session_replay.py, backend/utils/trace_capture.py, src/tui/screens/session_replay.py, tests/test_replay_slash_command.py, tests/test_session_replay.py, tests/test_session_replay_screen.py, tests/test_session_replay_wiring.py, tests/test_trace_capture.py
+**What it does**: Session Replay Tool for debugging agent failures - includes SessionReplayTool, TraceCapture utility, SessionReplayScreen TUI component, /replay slash command, full test coverage, and wiring into both entry points
+**Wired into**: (not documented — check Wire-in Checklist next round)

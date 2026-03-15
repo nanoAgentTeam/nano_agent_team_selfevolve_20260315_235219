@@ -8,6 +8,7 @@ from textual.containers import ScrollableContainer
 
 from .state import state, AgentMode
 from .screens.dashboard import AgentDashboardScreen
+from .screens.session_replay import SessionReplayScreen
 
 def handle_slash_command(app: App, command: str, source: str = "session", context: Any = None) -> bool:
     """
@@ -67,12 +68,29 @@ def handle_slash_command(app: App, command: str, source: str = "session", contex
         app.push_screen(AgentDashboardScreen())
         return True
 
+    elif cmd == "/replay":
+        # Open the session replay screen to view execution traces
+        # Optional: /replay <session_id> to view a specific session
+        session_id = " ".join(args).strip() if args else (app.session.session_id if app.session else None)
+        if session_id:
+            screen = SessionReplayScreen()
+            app.push_screen(screen)
+            # Load the session after pushing the screen
+            screen.load_session(session_id)
+            return True
+        else:
+            if source == "session" and context:
+                context["status_message"] = "No session available for replay"
+                context["status_style"] = "error"
+            return True
+
     elif cmd == "/help":
         help_text = """
 Available commands:
 /iterations <n> - Set max swarm iterations (10-1000)
 /status - Show current configuration
 /agents - Open agent dashboard
+/replay [session_id] - Open session replay to view execution traces
 /exit - Exit the application
 /help - Show this help message
         """

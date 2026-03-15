@@ -87,6 +87,52 @@ class TestToolRegistryIntegration:
         
         assert "code_health_analyzer" in registry.get_all_tool_names()
 
+    def test_session_replay_tool_imports_successfully(self):
+        """RED Test 11: SessionReplayTool should import without errors."""
+        from backend.tools.session_replay import SessionReplayTool
+        assert SessionReplayTool is not None
+
+    def test_session_replay_tool_inherits_base_tool(self):
+        """RED Test 12: SessionReplayTool should inherit from BaseTool."""
+        from backend.tools.session_replay import SessionReplayTool
+        from backend.tools.base import BaseTool
+        assert issubclass(SessionReplayTool, BaseTool)
+
+    def test_session_replay_tool_has_required_properties(self):
+        """RED Test 13: SessionReplayTool should have required properties."""
+        from backend.tools.session_replay import SessionReplayTool
+        tool = SessionReplayTool()
+        assert hasattr(tool, 'name')
+        assert hasattr(tool, 'description')
+        assert hasattr(tool, 'parameters_schema')
+        assert hasattr(tool, 'execute')
+        assert callable(tool.execute)
+        assert tool.name == "session_replay"
+
+    def test_session_replay_tool_can_be_manually_registered(self):
+        """RED Test 14: SessionReplayTool can be registered in registry."""
+        from backend.llm.tool_registry import ToolRegistry
+        from backend.tools.session_replay import SessionReplayTool
+
+        registry = ToolRegistry()
+        registry.register_tool_class("session_replay", SessionReplayTool)
+
+        # Check that session_replay is in the registry
+        assert "session_replay" in registry.get_all_tool_names()
+
+    def test_session_replay_tool_can_be_created_from_registry(self):
+        """RED Test 15: SessionReplayTool can be created from registry."""
+        from backend.llm.tool_registry import ToolRegistry
+        from backend.tools.session_replay import SessionReplayTool
+
+        registry = ToolRegistry()
+        registry.register_tool_class("session_replay", SessionReplayTool)
+
+        # Create an instance from registry
+        tool_instance = registry.create_tool("session_replay")
+        assert tool_instance is not None
+        assert isinstance(tool_instance, SessionReplayTool)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
