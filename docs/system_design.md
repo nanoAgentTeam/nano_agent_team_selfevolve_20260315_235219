@@ -81,6 +81,12 @@ User mission
 | `config.py` | Config: loads `llm_config.json`, `keys.json`, `tui_state.json` |
 | `provider_registry.py` | Known providers and their API base URLs |
 
+### Utilities (`backend/utils/`)
+| File | Purpose |
+|------|---------|
+| `agent_diagnosis/diagnosis_engine.py` | DiagnosisEngine: monitors agent health metrics and diagnoses issues |
+| `agent_diagnosis/recovery_strategies.py` | Recovery strategies: RetryStrategy, FallbackStrategy, CircuitBreakerStrategy, RecoveryManager |
+
 ### Skills (`.skills/`)
 | Skill | Trigger | Used By |
 |-------|---------|---------|
@@ -91,6 +97,7 @@ User mission
 | `executing-plans` | When executing a written plan | Worker agents |
 | `brainstorming` | Before creative/feature work | Architect |
 | `using-superpowers` | Start of any session | All agents |
+| `agent-self-diagnosis` | When monitoring agent health or implementing fault tolerance | Developer, Architect |
 
 ---
 
@@ -139,3 +146,8 @@ User mission
 **Changed**: backend/data/experience_memory.json, backend/utils/__init__.py, main.py, src/core/middlewares/__init__.py, src/tui/agent_bridge.py, IMPLEMENTATION_SUMMARY.md, backend/utils/reflection_analyzer.py, src/core/middlewares/reflection_middleware.py, tests/test_reflection_middleware.py
 **What it does**: Implement Agent Self-Reflection Middleware with ReflectionAnalyzer utility and ReflectionMiddleware
 **Wired into**: (not documented — check Wire-in Checklist next round)
+
+### Round 6 — Agent Self-Diagnosis & Recovery Skill (FEATURE)
+**Changed**: backend/utils/agent_diagnosis/diagnosis_engine.py, backend/utils/agent_diagnosis/recovery_strategies.py, backend/utils/agent_diagnosis/__init__.py, .skills/agent_self_diagnosis/SKILL.md, tests/test_agent_self_diagnosis.py, docs/system_design.md
+**What it does**: Provides agents with self-monitoring capabilities to diagnose health issues (error rates, response times, success rates) and execute recovery strategies (retry, fallback, circuit breaker)
+**Wired into**: .skills/ directory (auto-discovered by skill_registry.py), documented in system_design.md
