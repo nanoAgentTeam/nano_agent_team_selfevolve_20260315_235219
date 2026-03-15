@@ -63,6 +63,7 @@ User mission
 | `subagent.py` | `tool_registry.py` | Architect (legacy in-process subagent) |
 | `activate_skill.py` | `tool_registry.py` | All agents |
 | `evolution_workspace.py` | injected in `main.py` evolution block | Watchdog (evolution mode only) |
+| `experience_memory.py` | `main.py`, `src/tui/agent_bridge.py` | All agents (persistent memory across sessions) |
 
 ### Source Tools (`src/tools/`)
 | File | Purpose |
@@ -111,5 +112,10 @@ User mission
 **Changed**: src/core/middlewares/cost_tracker.py, src/core/middlewares/__init__.py, main.py, docs/system_design.md, tests/test_cost_tracker.py
 **What it does**: Adds a middleware that monitors and reports token usage and estimated costs for LLM API calls
 **Wired into**: main.py (Watchdog middleware chain) and documented in system_design.md
+
+### Round 1 — Experience Memory Tool (FEATURE)
+**Changed**: backend/tools/experience_memory.py, tests/test_experience_memory.py, main.py, src/tui/agent_bridge.py, docs/system_design.md
+**What it does**: Provides agents with persistent memory capabilities to save, retrieve, search, and manage experiences across sessions
+**Wired into**: main.py (Watchdog) and src/tui/agent_bridge.py (TUI)
 
 <!-- rounds appended below by evolution process -->
