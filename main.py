@@ -125,7 +125,7 @@ from src.core.agent_wrapper import SwarmAgent
 from backend.infra.config import Config
 from backend.tools.web_search import SearchTool
 from backend.tools.web_reader import WebReaderTool
-from src.core.middlewares import RequestMonitorMiddleware, ArchitectGuardMiddleware
+from src.core.middlewares import RequestMonitorMiddleware, ArchitectGuardMiddleware, ReflectionMiddleware
 from backend.infra.envs.local import LocalEnvironment
 from backend.tools.bash import BashTool
 from backend.tools.write_file import WriteFileTool
@@ -394,6 +394,7 @@ def main():
             blackboard_dir=blackboard_dir,
             skip_user_verification=args.evolution
         )
+        reflection_middleware = ReflectionMiddleware()
 
         # The Watchdog uses the Architect role to design and spawn other agents.
         watchdog = SwarmAgent(
@@ -402,7 +403,7 @@ def main():
             blackboard_dir=blackboard_dir,
             model=args.model,
             max_iterations=200,  # Increased Budget for Watchdog
-            extra_strategies=[request_monitor, watchdog_guard],
+            extra_strategies=[request_monitor, watchdog_guard, reflection_middleware],
             is_architect=True
         )
         

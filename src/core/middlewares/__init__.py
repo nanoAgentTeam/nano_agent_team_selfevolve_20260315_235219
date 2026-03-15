@@ -9,6 +9,7 @@ from .notification_awareness import NotificationAwarenessMiddleware
 from .activity_logger import ActivityLoggerMiddleware
 from .request_monitor import RequestMonitorMiddleware
 from .swarm_agent_guard import SwarmAgentGuardMiddleware
+from .reflection_middleware import ReflectionMiddleware
 
 __all__ = [
     "ParentProcessMonitorMiddleware",
@@ -22,4 +23,5 @@ __all__ = [
     "ActivityLoggerMiddleware",
     "RequestMonitorMiddleware",
     "SwarmAgentGuardMiddleware",
+    "ReflectionMiddleware",
 ]

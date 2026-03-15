@@ -26,7 +26,8 @@ from src.core.middlewares import (
     MailboxMiddleware,
     SwarmStateMiddleware,
     NotificationAwarenessMiddleware,
-    ActivityLoggerMiddleware
+    ActivityLoggerMiddleware,
+    ReflectionMiddleware
 )
 from backend.tools.base import BaseTool
 from backend.tools.web_search import SearchTool
@@ -305,6 +306,10 @@ class AgentBridge:
             confirmation_callback=self._confirmation_callback
         )
         self._swarm_agent.add_strategy(request_monitor)
+        
+        # Add ReflectionMiddleware for self-improvement
+        reflection_middleware = ReflectionMiddleware()
+        self._swarm_agent.add_strategy(reflection_middleware)
         
         # Add role-specific guard middleware
         if self.config.use_architect_prompt:
