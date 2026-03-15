@@ -138,6 +138,7 @@ from backend.tools.experience_memory import ExperienceMemoryTool
 from backend.tools.code_health_analyzer import CodeHealthAnalyzerTool
 from backend.tools.agent_monitor_tool import AgentMonitorTool
 from backend.tools.session_replay import SessionReplayTool
+from backend.tools.agent_diagnosis_tool import AgentDiagnosisTool
 
 # Ensure project root is in path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -430,6 +431,7 @@ def main():
         watchdog.add_tool(CodeHealthAnalyzerTool())
         watchdog.add_tool(AgentMonitorTool())
         watchdog.add_tool(SessionReplayTool())
+        watchdog.add_tool(AgentDiagnosisTool())
 
         # Evolution mode: add workspace commit/cleanup tool
         # finish_tool will BLOCK if this hasn't been called first

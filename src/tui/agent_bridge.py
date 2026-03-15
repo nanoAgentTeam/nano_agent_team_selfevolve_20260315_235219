@@ -36,6 +36,7 @@ from backend.tools.experience_memory import ExperienceMemoryTool
 from backend.tools.code_health_analyzer import CodeHealthAnalyzerTool
 from backend.tools.agent_monitor_tool import AgentMonitorTool
 from backend.tools.session_replay import SessionReplayTool
+from backend.tools.agent_diagnosis_tool import AgentDiagnosisTool
 
 from src.core.agent_wrapper import SwarmAgent
 from .components.message import ChatMessage
@@ -284,6 +285,7 @@ class AgentBridge:
         self._swarm_agent.add_tool(WebReaderTool())
         self._swarm_agent.add_tool(AgentMonitorTool())
         self._swarm_agent.add_tool(SessionReplayTool())
+        self._swarm_agent.add_tool(AgentDiagnosisTool())
         
         # Add basic file tools to architect as well
         from backend.tools.bash import BashTool
