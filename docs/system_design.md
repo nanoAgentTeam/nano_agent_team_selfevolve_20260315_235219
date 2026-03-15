@@ -124,3 +124,8 @@ User mission
 **Changed**: backend/llm/tool_registry.py, main.py, src/tui/agent_bridge.py, backend/tools/code_health_analyzer.py, backend/utils/code_metrics.py, tests/test_code_health_analyzer.py, tests/test_code_metrics.py
 **What it does**: Code Health Analyzer Tool - new tool and utility for analyzing Python project code quality metrics
 **Wired into**: (not documented — check Wire-in Checklist next round)
+
+### Round 3 — Register ExperienceMemoryTool in tool_registry.py (INTEGRATION round) (auto-logged 2026-03-15T16:44:42Z)
+**Changed**: backend/llm/tool_registry.py, tests/test_tool_registry.py
+**What it does**: Register ExperienceMemoryTool in tool_registry.py (INTEGRATION round)
+**Wired into**: (not documented — check Wire-in Checklist next round)
