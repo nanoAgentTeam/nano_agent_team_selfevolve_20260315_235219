@@ -64,6 +64,7 @@ User mission
 | `activate_skill.py` | `tool_registry.py` | All agents |
 | `evolution_workspace.py` | injected in `main.py` evolution block | Watchdog (evolution mode only) |
 | `experience_memory.py` | `main.py`, `src/tui/agent_bridge.py` | All agents (persistent memory across sessions) |
+| `agent_monitor_tool.py` | `tool_registry.py`, `main.py`, `src/tui/agent_bridge.py` | All agents (agent status monitoring) |
 
 ### Source Tools (`src/tools/`)
 | File | Purpose |
@@ -114,6 +115,11 @@ User mission
 ## Evolution Changelog
 
 *(Each PASS round appends here. Newest at top.)*
+
+### Round 7 — Agent Monitor Tool Integration (INTEGRATION)
+**Changed**: backend/tools/agent_monitor_tool.py, backend/llm/tool_registry.py, main.py, src/tui/agent_bridge.py, docs/system_design.md, tests/test_agent_monitor_tool.py
+**What it does**: Wraps agent_monitor.py utility as AgentMonitorTool, exposing agent status monitoring and health reporting capabilities to all agents
+**Wired into**: backend/llm/tool_registry.py (registry), main.py (Watchdog), src/tui/agent_bridge.py (TUI)
 
 ### Round 1 — Cost Tracking Middleware (FEATURE)
 **Changed**: src/core/middlewares/cost_tracker.py, src/core/middlewares/__init__.py, main.py, docs/system_design.md, tests/test_cost_tracker.py

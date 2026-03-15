@@ -35,6 +35,7 @@ from backend.tools.grep import GrepTool
 from backend.tools.glob import GlobTool
 from backend.tools.code_health_analyzer import CodeHealthAnalyzerTool
 from backend.tools.experience_memory import ExperienceMemoryTool
+from backend.tools.agent_monitor_tool import AgentMonitorTool
 from backend.utils.logger import Logger
 
 
@@ -208,6 +209,7 @@ def bootstrap_llm(agents_dir: str, skills_dir: str, engine_factory: Callable) ->
     registry.register_tool_class("activate_skill", ActivateSkillTool)
     registry.register_tool_class("code_health_analyzer", CodeHealthAnalyzerTool)
     registry.register_tool_class("experience_memory", ExperienceMemoryTool)
+    registry.register_tool_class("agent_monitor", AgentMonitorTool)
     # registry.register_tool_class("read_skill_resource", SkillResourceTool)
     # registry.register_tool_class("query_goal", QueryGoalTool)
     # registry.register_tool_class("query_intent", QueryIntentTool)

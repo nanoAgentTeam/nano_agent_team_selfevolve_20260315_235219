@@ -136,6 +136,7 @@ from backend.tools.glob import GlobTool
 from backend.tools.evolution_workspace import EvolutionWorkspaceTool
 from backend.tools.experience_memory import ExperienceMemoryTool
 from backend.tools.code_health_analyzer import CodeHealthAnalyzerTool
+from backend.tools.agent_monitor_tool import AgentMonitorTool
 
 # Ensure project root is in path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -426,6 +427,7 @@ def main():
         watchdog.add_tool(GlobTool())
         watchdog.add_tool(ExperienceMemoryTool())
         watchdog.add_tool(CodeHealthAnalyzerTool())
+        watchdog.add_tool(AgentMonitorTool())
 
         # Evolution mode: add workspace commit/cleanup tool
         # finish_tool will BLOCK if this hasn't been called first
