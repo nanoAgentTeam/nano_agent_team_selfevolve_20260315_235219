@@ -120,6 +120,11 @@ User mission
 
 <!-- rounds appended below by evolution process -->
 
+### Round 5 — Agent Status Dashboard (FEATURE)
+**Changed**: backend/utils/agent_monitor.py, backend/utils/__init__.py, src/tui/components/agent_status_table.py, src/tui/components/__init__.py, src/tui/screens/dashboard.py, src/tui/screens/__init__.py, src/tui/slash_commands.py, tests/test_agent_monitor.py, tests/test_agent_status_table.py, tests/test_dashboard_screen.py
+**What it does**: Real-time dashboard showing agent status (RUNNING/DEAD/IDLE), PID, role, task, uptime with auto-refresh and /agents slash command.
+**Wired into**: src/tui/slash_commands.py (dashboard screen), backend/utils/__init__.py (utilities exported)
+
 ### Round 2 — Code Health Analyzer Tool - new tool and utility for analyzing Python project code quality metrics (auto-logged 2026-03-15T16:28:03Z)
 **Changed**: backend/llm/tool_registry.py, main.py, src/tui/agent_bridge.py, backend/tools/code_health_analyzer.py, backend/utils/code_metrics.py, tests/test_code_health_analyzer.py, tests/test_code_metrics.py
 **What it does**: Code Health Analyzer Tool - new tool and utility for analyzing Python project code quality metrics

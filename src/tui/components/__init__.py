@@ -11,6 +11,7 @@ from .message import (
     ThinkingWidget,
     create_message_widget,
 )
+from .agent_status_table import AgentStatusTable
 
 __all__ = [
     "ChatMessage",
@@ -20,4 +21,5 @@ __all__ = [
     "ToolMessageWidget",
     "ThinkingWidget",
     "create_message_widget",
+    "AgentStatusTable",
 ]

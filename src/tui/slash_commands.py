@@ -7,6 +7,7 @@ from textual.widgets import Static
 from textual.containers import ScrollableContainer
 
 from .state import state, AgentMode
+from .screens.dashboard import AgentDashboardScreen
 
 def handle_slash_command(app: App, command: str, source: str = "session", context: Any = None) -> bool:
     """
@@ -61,11 +62,17 @@ def handle_slash_command(app: App, command: str, source: str = "session", contex
         app.exit()
         return True
         
+    elif cmd == "/agents":
+        # Open the agent dashboard screen
+        app.push_screen(AgentDashboardScreen())
+        return True
+
     elif cmd == "/help":
         help_text = """
 Available commands:
 /iterations <n> - Set max swarm iterations (10-1000)
 /status - Show current configuration
+/agents - Open agent dashboard
 /exit - Exit the application
 /help - Show this help message
         """
