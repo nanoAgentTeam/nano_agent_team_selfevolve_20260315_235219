@@ -30,13 +30,14 @@ log() {
 }
 
 # ─── Persistent Status Panel ─────────────────────────────
-STATUS_HEIGHT=9
+STATUS_HEIGHT=13
 SESSION_START_TS=$(date +%s)
 STATUS_UPDATER_PID=""
 
 render_status_panel() {
     local phase="${1:-Initializing}"
     local cols=$(tput cols 2>/dev/null || echo 80)
+    [ $cols -lt 100 ] && cols=100
     local inner=$((cols - 4))
     local now=$(date +%s)
     local elapsed=$(( now - SESSION_START_TS ))
@@ -65,18 +66,68 @@ render_status_panel() {
     local running=$((total + 1))
     [ "$running" -gt "$MAX_ROUNDS" ] && running=$MAX_ROUNDS
 
+    # Determine current phase number for pipeline highlight
+    local phase_num=0
+    case "$phase" in
+        *"Phase 1"*|*"Screen"*|*"Initializing"*) phase_num=1 ;;
+        *"Phase 2"*|*"Evolution"*) phase_num=2 ;;
+        *"Phase 3"*|*"Debug"*) phase_num=3 ;;
+        *"Phase 4"*|*"README"*) phase_num=4 ;;
+        *"Phase 5"*|*"Push"*|*"Commit"*) phase_num=5 ;;
+        *"Complete"*) phase_num=6 ;;
+    esac
+
+    # Build colored pipeline: green=done, yellow=active, gray=pending
+    local pipe_color="" pipe_plain=""
+    local labels=("Setup" "Evolve" "Debug" "README" "Push")
+    for i in 0 1 2 3 4; do
+        local n=$((i + 1))
+        local label="${labels[$i]}"
+        if [ $phase_num -eq 6 ] || [ $n -lt $phase_num ]; then
+            pipe_color="${pipe_color}\e[42;30m ${label} \e[44;97m"
+            pipe_plain="${pipe_plain} ${label} "
+        elif [ $n -eq $phase_num ]; then
+            pipe_color="${pipe_color}\e[43;30m> ${label} <\e[44;97m"
+            pipe_plain="${pipe_plain}> ${label} <"
+        else
+            pipe_color="${pipe_color}\e[90m ${label} \e[97m"
+            pipe_plain="${pipe_plain} ${label} "
+        fi
+        if [ $i -lt 4 ]; then
+            pipe_color="${pipe_color} > "
+            pipe_plain="${pipe_plain} > "
+        fi
+    done
+    local pad=$((inner - ${#pipe_plain}))
+    [ $pad -lt 0 ] && pad=0
+
     # Save cursor, draw status at top, restore cursor
     tput sc
     tput cup 0 0
 
     local border=$(printf '═%.0s' $(seq 1 $((cols - 2))))
-    printf "\e[44;97m╔%s╗\e[0m\n" "$border"
-    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  EVOLUTION SESSION: ${SESSION_NAME}"
-    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  Model: ${MODEL}  |  Round: ${running}/${MAX_ROUNDS}  |  Elapsed: ${elapsed_str}"
-    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  Phase: ${phase}"
-    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  Score: ${pass} PASS / ${fail} FAIL / ${total} completed"
-    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  History:${history:- (none yet)}"
-    printf "\e[44;97m║ %-${inner}s ║\e[0m\n" "  Work: ${WORK_REPO}"
+    local sep=$(printf '═%.0s' $(seq 1 $((cols - 2))))
+
+    # p = pad+truncate format: min inner, max inner
+    local fmt="%-${inner}.${inner}s"
+
+    # ── Title section (magenta background) ──
+    printf "\e[45;97m╔%s╗\e[0m\n" "$border"
+    printf "\e[45;97m║ ${fmt} ║\e[0m\n" "NANO AGENT TEAM -- SELF-EVOLVING AI FRAMEWORK"
+    printf "\e[45;97m║ ${fmt} ║\e[0m\n" ""
+    printf "\e[45;97m║ ${fmt} ║\e[0m\n" "What happens when you let an AI framework evolve itself?"
+    printf "\e[45;97m║ ${fmt} ║\e[0m\n" "This system is its own user -- each round, a team of AI agents searches the web,"
+    printf "\e[45;97m║ ${fmt} ║\e[0m\n" "analyzes the codebase for gaps, proposes an evolution direction, implements the"
+    printf "\e[45;97m║ ${fmt} ║\e[0m\n" "feature, runs tests, passes code review, and merges -- all fully unattended."
+    printf "\e[45;97m║ ${fmt} ║\e[0m\n" "No human decides what to build next. The framework figures it out and ships it."
+
+    # ── Separator ──
+    printf "\e[44;97m╠%s╣\e[0m\n" "$sep"
+
+    # ── Runtime info section (blue background) ──
+    printf "\e[44;97m║ ${fmt} ║\e[0m\n" "${SESSION_NAME}  |  ${MODEL}  |  Round ${running}/${MAX_ROUNDS}  |  Elapsed: ${elapsed_str}"
+    printf "\e[44;97m║ ${pipe_color}%${pad}s ║\e[0m\n" ""
+    printf "\e[44;97m║ ${fmt} ║\e[0m\n" "Score: ${pass} PASS / ${fail} FAIL / ${total} done   History:${history:- (none yet)}"
     printf "\e[44;97m╚%s╝\e[0m\n" "$border"
 
     tput rc

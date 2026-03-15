@@ -1,5 +1,15 @@
 {
   "providers": {
+    "ltcraft": {
+      "base_url": "https://ai.ltcraft.cn:12000/v1",
+      "env": [],
+      "models": [
+        {
+          "name": "claude-opus-4-6",
+          "id": "claude-opus-4-6"
+        }
+      ]
+    },
     "step": {
       "base_url": "https://api.stepfun.com/v1",
       "env": [
