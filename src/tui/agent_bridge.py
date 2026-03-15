@@ -32,6 +32,7 @@ from backend.tools.base import BaseTool
 from backend.tools.web_search import SearchTool
 from backend.tools.web_reader import WebReaderTool
 from backend.tools.experience_memory import ExperienceMemoryTool
+from backend.tools.code_health_analyzer import CodeHealthAnalyzerTool
 
 from src.core.agent_wrapper import SwarmAgent
 from .components.message import ChatMessage
@@ -220,6 +221,7 @@ class AgentBridge:
                 GrepTool(),
                 GlobTool(),
                 ExperienceMemoryTool(),
+                CodeHealthAnalyzerTool(),
                 BrowserUseTool(get_model_key_fn=self._get_model_key_for_browser),
             ]
 
