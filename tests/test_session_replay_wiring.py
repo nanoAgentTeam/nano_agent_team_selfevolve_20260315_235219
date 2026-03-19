@@ -11,7 +11,8 @@ def test_session_replay_tool_importable():
 def test_session_replay_tool_in_main_py():
     """Verify SessionReplayTool is registered in main.py via add_tool()."""
     # Read main.py and check for SessionReplayTool registration
-    with open('/Users/zc/PycharmProjects/nano_agent_team_selfevolve_20260315_235219/.blackboard/resources/workspace/main.py', 'r') as f:
+    import os
+    with open(os.path.join(os.path.dirname(__file__), '..', 'main.py'), 'r') as f:
         content = f.read()
     
     # Check for import
@@ -26,7 +27,8 @@ def test_session_replay_tool_in_main_py():
 def test_session_replay_tool_in_agent_bridge():
     """Verify SessionReplayTool is registered in agent_bridge.py."""
     # Read agent_bridge.py and check for SessionReplayTool registration
-    with open('/Users/zc/PycharmProjects/nano_agent_team_selfevolve_20260315_235219/.blackboard/resources/workspace/src/tui/agent_bridge.py', 'r') as f:
+    import os
+    with open(os.path.join(os.path.dirname(__file__), '..', 'src', 'tui', 'agent_bridge.py'), 'r') as f:
         content = f.read()
     
     # Check for import or reference
